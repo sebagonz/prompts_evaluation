@@ -1,0 +1,12 @@
+{
+  "name": "prompt-security-poc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "POC local en contenedor para analizar prompts txt/md sin LLM.",
+  "scripts": {
+    "scan": "scan-prompts prompts"
+  },
+  "dependencies": {
+    "@promptsonar/cli": "1.5.1"
+  }
+}

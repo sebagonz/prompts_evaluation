@@ -1,0 +1,15 @@
+services:
+  prompt-security:
+    build:
+      context: .
+    image: prompt-security-poc:local
+    volumes:
+      - ./prompts:/workspace/prompts:ro
+      - ./reports:/workspace/reports
+    # En Linux/SUSE, definir LOCAL_UID y LOCAL_GID con el usuario que ejecuta
+    # Docker para evitar reportes propiedad de root. 1000 funciona como valor
+    # por defecto en la mayoría de instalaciones de laboratorio.
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    environment:
+      REPORTS_DIR: /workspace/reports
+    command: ["prompts"]
