@@ -50,6 +50,7 @@ Los reportes se escriben en `reports/`:
 *-promptsonar.json
 *-promptsonar.sarif
 *-pi-auditor.json
+*-pi-auditor.sarif
 ```
 
 Un código distinto de cero puede significar que hubo hallazgos; verificar los
@@ -82,3 +83,25 @@ parámetro de build (`AUDITOR_REF`) que hoy apunta a `main`; antes de llevarlo a
 una solución de desarrollo debe fijarse a un commit o tag revisado y conservar
 la procedencia/SBOM de la imagen. Este POC no implementa CI/CD, policy gates,
 waivers ni gestión corporativa de vulnerabilidades.
+
+### Exportar el resultado de pi-auditor a SonarQube
+
+El contenedor convierte automáticamente cada reporte `*-pi-auditor.json` a
+SARIF 2.1.0. También puede ejecutarse de forma independiente:
+
+```bash
+python3 scripts/pi_auditor_to_sarif.py \
+  reports/prompts-vulnerable_prompt-pi-auditor.json \
+  --output reports/prompts-vulnerable_prompt-pi-auditor.sarif
+```
+
+Para importar uno o más reportes con SonarScanner, indicar las rutas relativas
+al directorio base del análisis:
+
+```bash
+sonar-scanner \
+  -Dsonar.sarifReportPaths=reports/prompts-vulnerable_prompt-pi-auditor.sarif
+```
+
+SonarQube registra estos resultados como external issues; no forman parte de
+un quality profile ni de las reglas nativas de SonarQube.
