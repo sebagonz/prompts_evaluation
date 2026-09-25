@@ -51,10 +51,15 @@ Los reportes se escriben en `reports/`:
 *-promptsonar.sarif
 *-pi-auditor.json
 *-pi-auditor.sarif
+scan-summary.json
 ```
 
 Un código distinto de cero puede significar que hubo hallazgos; verificar los
 archivos de salida antes de considerarlo un fallo técnico.
+
+`scan-summary.json` reúne por prompt los conteos de severidad de PromptSonar y
+pi-auditor, la política aplicada, versiones disponibles y el resultado
+`PASS`, `BLOCK` o `ERROR`. El mismo resumen se imprime al final de stdout.
 
 ## Red corporativa y certificados
 
