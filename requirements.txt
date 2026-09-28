@@ -1,0 +1,4 @@
+# ai-scan — dependencias mínimas.
+PyYAML==6.0.2
+# Tests:
+pytest==8.3.3

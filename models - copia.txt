@@ -1,0 +1,87 @@
+"""
+Modelos de dominio del escáner.
+"""
+from __future__ import annotations
+
+import enum
+from dataclasses import dataclass, field, asdict
+from typing import Any
+
+
+class Severity(str, enum.Enum):
+    BLOCKER = "blocker"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    INFO = "info"
+
+    @property
+    def rank(self) -> int:
+        return {"blocker": 4, "high": 3, "medium": 2, "low": 1, "info": 0}[self.value]
+
+
+# Mapeo a estándares — se emite en cada finding para trazabilidad regulatoria.
+class Standard(str, enum.Enum):
+    OWASP_LLM = "OWASP-LLM-Top10"
+    MITRE_ATLAS = "MITRE-ATLAS"
+    NIST_AI_RMF = "NIST-AI-RMF"
+    ISO_42001 = "ISO-42001"
+    BCRA = "BCRA"           # Com. "A" 7724 / 8014 (lineamientos tecnología/ciberseguridad)
+    LEY_25326 = "Ley-25.326"  # protección de datos personales (PII)
+
+
+@dataclass
+class Finding:
+    """Un hallazgo concreto del escaneo."""
+    check_id: str
+    domain: str              # ai_components | prompts | pii
+    severity: Severity
+    title: str
+    detail: str
+    file: str | None = None
+    line: int | None = None
+    remediation: str = ""
+    standards: list[Standard] = field(default_factory=list)
+    fingerprint: str = ""    # para deduplicación en GitLab Code Quality
+
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        d["severity"] = self.severity.value
+        d["standards"] = [s.value for s in self.standards]
+        return d
+
+
+@dataclass
+class ScanResult:
+    repo_path: str
+    findings: list[Finding] = field(default_factory=list)
+    detected_components: dict[str, Any] = field(default_factory=dict)
+    # Set de archivos (posix, relativos al repo) a los que se limita el análisis en
+    # modo diff. None => full-scan. Los detectores usan should_scan() para filtrar.
+    changed_files: set[str] | None = None
+
+    def add(self, f: Finding) -> None:
+        self.findings.append(f)
+
+    def should_scan(self, rel: str) -> bool:
+        """True si `rel` debe analizarse bajo el scope actual (full o diff)."""
+        if self.changed_files is None:
+            return True
+        return rel in self.changed_files
+
+    def is_diff(self) -> bool:
+        return self.changed_files is not None
+
+    def by_severity(self, sev: Severity) -> list[Finding]:
+        return [f for f in self.findings if f.severity == sev]
+
+    def max_severity(self) -> Severity:
+        if not self.findings:
+            return Severity.INFO
+        return max((f.severity for f in self.findings), key=lambda s: s.rank)
+
+    def is_ai_solution(self) -> bool:
+        """True si se detectó algún componente de IA — define si aplica el gate."""
+        return bool(self.detected_components.get("sdks") or
+                    self.detected_components.get("mcps") or
+                    self.detected_components.get("tools"))

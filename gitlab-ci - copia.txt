@@ -1,0 +1,80 @@
+# =============================================================================
+# Gate 2 — Commit. Control de seguridad pre-merge para soluciones con IA.
+#
+# Compone tres capas, según el diseño del ciclo:
+#   1. SAST nativo            (plantilla de la plataforma de CI/CD)
+#   2. Secret Detection nativo (plantilla nativa; motor gitleaks gestionado)
+#   3. ai-scan                (controles específicos de IA que lo nativo no cubre)
+#
+# Decisión: ai-scan
+# conserva SEC-001 sólo para claves de IA/gateway con contexto de dominio.
+#
+# FASE 1 = WARN: ai-scan corre con allow_failure (reporta, no bloquea) para
+# calibrar falsos positivos. Paso a enforcement documentado al final.
+#
+# Uso: incluir desde el .gitlab-ci.yml del repo objetivo:
+#   include:
+#     - project: 'seguridad-ia/ai-scan'
+#       file: '/.gitlab-ci.yml'
+# =============================================================================
+
+include:
+  - template: Jobs/SAST.gitlab-ci.yml
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+
+stages:
+  - test          # stage por defecto de las plantillas nativas (SAST, Secret Detection)
+  - ai_security
+
+variables:
+  AISCAN_MODE: "warn"            # warn (fase 1) | enforce (fase 2)
+  AISCAN_THRESHOLD: "blocker"    # umbral de bloqueo cuando MODE=enforce
+  # En MR, ai-scan analiza sólo lo cambiado vs la base del MR (diff-aware) para no
+  # bloquear por deuda preexistente. En default branch hace full-scan (baseline).
+  GIT_DEPTH: "50"
+
+# ---- Gate IA: detección IA + prompts + supply chain + model artifacts + PII + secrets ----
+ai-scan:
+  stage: ai_security
+  image: python:3.11-slim
+  allow_failure: true            # <<< FASE 1: no bloquea. Quitar para enforcement.
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git >/dev/null
+    - pip install --no-cache-dir -r ai-scan/requirements.txt || pip install --no-cache-dir pyyaml
+  script:
+    - |
+      DIFF_ARG=""
+      if [ -n "$CI_MERGE_REQUEST_DIFF_BASE_SHA" ]; then
+        DIFF_ARG="--diff-base $CI_MERGE_REQUEST_DIFF_BASE_SHA"
+      fi
+      MANIFEST_ARG=""
+      if [ -f manifest.yaml ]; then MANIFEST_ARG="--manifest manifest.yaml"; fi
+      python -m aiscan.cli scan "$CI_PROJECT_DIR" \
+        --mode "$AISCAN_MODE" \
+        --threshold "$AISCAN_THRESHOLD" \
+        --reports-dir "$CI_PROJECT_DIR/reports" \
+        $DIFF_ARG $MANIFEST_ARG
+  artifacts:
+    when: always
+    paths:
+      - reports/ai-scan-findings.json
+    reports:
+      codequality: reports/gl-code-quality-report.json
+      sast: reports/gl-sast-report.json   # alimenta Security Dashboard (Ultimate)
+  rules:
+    # Pipeline de merge request: diff-aware.
+    - if: '$CI_MERGE_REQUEST_IID'
+    # Pipeline de rama por defecto: full-scan (foto de baseline).
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+# =============================================================================
+# PASO A ENFORCEMENT (fase 2), por solución, una vez calibrados falsos positivos:
+#   1. variables: AISCAN_MODE: "enforce"
+#   2. En el job ai-scan, eliminar `allow_failure: true`.
+#   3. Opcional: ajustar AISCAN_THRESHOLD (blocker | high | medium).
+# El enforcement en MR es diff-aware: sólo bloquea por hallazgos en lo cambiado.
+#
+# Las plantillas nativas (SAST, Secret Detection) se controlan por separado con
+# las variables/políticas de la plataforma de CI/CD (p. ej. SAST_EXCLUDED_PATHS,
+# o Scan Execution Policies a nivel grupo para imponerlas de forma centralizada).
+# =============================================================================

@@ -1,0 +1,31 @@
+"""Motor de política: decide el exit code según severidad y modo.
+
+Fase 1 = WARN: reporta todo, exit 0 siempre (allow_failure en CI igual no rompe,
+pero dejamos exit 0 para que el job aparezca verde y no genere ruido prematuro).
+Fase 2 = ENFORCE: exit !=0 si hay findings con severidad >= umbral, bloqueando el MR.
+"""
+from __future__ import annotations
+
+import enum
+
+from .models import ScanResult, Severity
+
+
+class Mode(str, enum.Enum):
+    WARN = "warn"        # fase 1 — reporta, no bloquea
+    ENFORCE = "enforce"  # fase 2 — bloquea según umbral
+
+
+# Exit codes para que el .gitlab-ci.yml distinga.
+EXIT_OK = 0
+EXIT_FINDINGS_BELOW_THRESHOLD = 0
+EXIT_BLOCK = 1
+
+
+def decide(result: ScanResult, mode: Mode, threshold: Severity = Severity.BLOCKER) -> int:
+    if mode == Mode.WARN:
+        return EXIT_OK
+    # ENFORCE: bloquea si la severidad máxima alcanza el umbral.
+    if result.findings and result.max_severity().rank >= threshold.rank:
+        return EXIT_BLOCK
+    return EXIT_OK

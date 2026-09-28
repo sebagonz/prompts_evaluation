@@ -1,0 +1,171 @@
+"""Detector de supply chain / dependencias.
+
+Driver: GAP-03 (dependency management post-incidente LiteLLM PyPI mar-2026) y
+OWASP LLM03 (Supply Chain). El incidente de LiteLLM 1.82.7/1.82.8 NO fue una CVE:
+fue un release malicioso. Por eso aquí NO alcanza con escanear CVEs conocidas; se
+controla:
+
+  1. Pinning estricto con hashes (==X.Y.Z, idealmente con --require-hashes).
+  2. Lista de versiones/paquetes maliciosos conocidos (denylist interna).
+  3. Heurística de typosquatting contra paquetes IA populares.
+  4. Fuentes de índice no oficiales (--index-url / --extra-index-url sospechosos).
+
+El escaneo de CVEs (pip-audit/OSV) se delega a un job aparte en el .gitlab-ci.yml;
+este detector cubre la dimensión de MALICIA, que es el gap real.
+"""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from ..models import Finding, ScanResult, Severity, Standard
+
+# Denylist interna de releases maliciosos/comprometidos conocidos.
+# Mantener versionada y alimentada por inteligencia (GitLab Advisory, OSV, internos).
+KNOWN_MALICIOUS: dict[str, set[str]] = {
+    "litellm": {"1.82.7", "1.82.8"},   # incidente PyPI mar-2026 (GAP-03)
+}
+
+# Paquetes IA legítimos populares — base para detectar typosquatting.
+POPULAR_AI_PKGS = {
+    "openai", "anthropic", "litellm", "langchain", "llama-index", "transformers",
+    "vllm", "cohere", "mistralai", "ollama", "guardrails-ai", "instructor",
+    "tiktoken", "sentence-transformers", "huggingface-hub", "accelerate",
+}
+
+REQ_FILES = ["requirements.txt", "requirements-dev.txt", "constraints.txt"]
+PIN_RE = re.compile(r"^\s*([A-Za-z0-9._-]+)\s*(==|>=|<=|~=|>|<|!=)?\s*([0-9][^\s;#]*)?", )
+
+
+def _levenshtein(a: str, b: str) -> int:
+    if a == b:
+        return 0
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def _check_requirements(path: Path, rel: str, result: ScanResult) -> None:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return
+
+    for i, raw in enumerate(lines, 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        # Índices alternativos = riesgo de dependency confusion.
+        if line.startswith(("--index-url", "--extra-index-url")):
+            if "pypi.org" not in line and "/simple" in line:
+                result.add(Finding(
+                    check_id="SC-004", domain="supply_chain", severity=Severity.HIGH,
+                    title="Índice de paquetes alternativo declarado",
+                    detail=f"Fuente no estándar: {line}",
+                    file=rel, line=i,
+                    remediation="Usar únicamente el mirror interno aprobado. Riesgo de "
+                                "dependency confusion / sustitución de paquete.",
+                    standards=[Standard.OWASP_LLM],
+                    fingerprint=f"SC-004:{rel}:{i}",
+                ))
+            continue
+
+        m = PIN_RE.match(line)
+        if not m:
+            continue
+        name, op, ver = m.group(1).lower(), m.group(2), m.group(3)
+
+        # 1. Pinning estricto.
+        if op != "==" or not ver:
+            result.add(Finding(
+                check_id="SC-001", domain="supply_chain", severity=Severity.MEDIUM,
+                title="Dependencia sin pin exacto",
+                detail=f"'{line}' no está fijada con '==version'. Permite resolución a "
+                       f"un release nuevo (potencialmente malicioso) sin revisión.",
+                file=rel, line=i,
+                remediation="Fijar con '==X.Y.Z' y preferir --require-hashes / lockfile.",
+                standards=[Standard.OWASP_LLM, Standard.NIST_AI_RMF],
+                fingerprint=f"SC-001:{rel}:{name}",
+            ))
+
+        # 2. Denylist de releases maliciosos.
+        if ver and name in KNOWN_MALICIOUS and ver in KNOWN_MALICIOUS[name]:
+            result.add(Finding(
+                check_id="SC-002", domain="supply_chain", severity=Severity.BLOCKER,
+                title="Versión maliciosa conocida",
+                detail=f"{name}=={ver} está en la denylist interna (release comprometido).",
+                file=rel, line=i,
+                remediation=f"Actualizar {name} a una versión segura inmediatamente y rotar "
+                            f"cualquier secreto expuesto durante la build afectada.",
+                standards=[Standard.OWASP_LLM, Standard.MITRE_ATLAS],
+                fingerprint=f"SC-002:{rel}:{name}:{ver}",
+            ))
+
+        # 3. Typosquatting.
+        if name not in POPULAR_AI_PKGS:
+            for legit in POPULAR_AI_PKGS:
+                d = _levenshtein(name, legit)
+                if 0 < d <= 1 and abs(len(name) - len(legit)) <= 1:
+                    result.add(Finding(
+                        check_id="SC-003", domain="supply_chain", severity=Severity.HIGH,
+                        title="Posible typosquatting",
+                        detail=f"'{name}' se parece a '{legit}' (distancia {d}). "
+                               f"Posible paquete suplantador.",
+                        file=rel, line=i,
+                        remediation=f"Verificar si se quiso usar '{legit}'. Confirmar el "
+                                    f"paquete en el mirror interno antes de instalar.",
+                        standards=[Standard.OWASP_LLM],
+                        fingerprint=f"SC-003:{rel}:{name}",
+                    ))
+                    break
+
+    # Hashes ausentes a nivel archivo.
+    text = "\n".join(lines)
+    if any(PIN_RE.match(l.strip()) for l in lines if l.strip() and not l.startswith("#")) \
+            and "--hash=" not in text:
+        result.add(Finding(
+            check_id="SC-005", domain="supply_chain", severity=Severity.MEDIUM,
+            title="requirements sin verificación por hash",
+            detail=f"{rel} no usa --hash=. Sin hashes no hay garantía de integridad del "
+                   f"artefacto descargado.",
+            file=rel,
+            remediation="Generar con pip-compile --generate-hashes y instalar con "
+                        "pip install --require-hashes.",
+            standards=[Standard.OWASP_LLM, Standard.NIST_AI_RMF],
+            fingerprint=f"SC-005:{rel}",
+        ))
+
+
+def detect(root: Path, result: ScanResult, changed_files: set[str] | None = None) -> None:
+    seen = False
+    for name in REQ_FILES:
+        for path in root.rglob(name):
+            if any(part in {".git", ".venv", "venv", "node_modules"} for part in path.parts):
+                continue
+            rel = path.relative_to(root).as_posix()
+            seen = True
+            if not result.should_scan(rel):
+                continue
+            _check_requirements(path, rel, result)
+
+    # Si hay componentes IA pero no se halló ningún manifiesto de dependencias,
+    # no podemos asegurar la supply chain — eso en sí es un hallazgo.
+    if result.is_ai_solution() and not seen and not list(root.rglob("poetry.lock")) \
+            and not list(root.rglob("Pipfile.lock")):
+        result.add(Finding(
+            check_id="SC-006", domain="supply_chain", severity=Severity.MEDIUM,
+            title="Sin manifiesto de dependencias reconocido",
+            detail="Solución con IA sin requirements.txt / lockfile detectable. "
+                   "No se puede auditar la cadena de suministro.",
+            remediation="Declarar dependencias en un manifiesto pinneado y versionado.",
+            standards=[Standard.OWASP_LLM, Standard.NIST_AI_RMF],
+        ))

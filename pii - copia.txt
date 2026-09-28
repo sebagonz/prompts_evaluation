@@ -1,0 +1,163 @@
+"""Detector de PII en datos de prueba (baseline 1.06).
+
+Las fixtures y datasets de test son una fuente habitual de fuga de PII real al
+repositorio. Este detector incluye reconocedores específicos de Argentina —que un
+escáner genérico no trae— con validación de checksum para reducir falsos positivos:
+
+  PII-001 (HIGH): CUIT/CUIL válido (validación módulo 11).
+  PII-002 (HIGH): DNI (formato con puntos, o número de 7-8 dígitos junto a un
+                  indicador de documento).
+  PII-003 (HIGH): número de tarjeta que pasa el algoritmo de Luhn.
+  PII-004 (MEDIUM): dirección de email.
+
+Mapea a Ley 25.326 (protección de datos personales) y a los lineamientos del BCRA.
+Se acota a rutas y formatos típicos de datos de prueba para no escanear todo el repo.
+"""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from ..models import Finding, ScanResult, Severity, Standard
+
+CUIT_RE = re.compile(r"\b(20|23|24|27|30|33|34)[-\s]?(\d{8})[-\s]?(\d)\b")
+DNI_DOTTED_RE = re.compile(r"\b\d{1,2}\.\d{3}\.\d{3}\b")
+DNI_CONTEXT_RE = re.compile(r"(?i)\b(dni|d\.n\.i|documento|nro\.?\s*doc|n[ro]*\s*documento)\b")
+DNI_NUM_RE = re.compile(r"\b\d{7,8}\b")
+EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+CARD_RE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
+
+# Rutas/sufijos típicos de datos de prueba.
+TEST_HINT = re.compile(
+    r"(?i)(^|/)(tests?|fixtures?|samples?|seeds?|mocks?|stubs?|testdata|test[_-]?data|"
+    r"factories|examples?)(/|$)")
+DATA_SUFFIXES = {".csv", ".tsv", ".sql", ".ndjson", ".json", ".yaml", ".yml", ".txt", ".xml"}
+_SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
+_MAX_BYTES = 5_000_000
+
+
+def _cuit_valid(t2: str, dni8: str, check: str) -> bool:
+    digits = [int(c) for c in (t2 + dni8)]
+    mult = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]
+    total = sum(d * m for d, m in zip(digits, mult))
+    rem = total % 11
+    cd = 11 - rem
+    if cd == 11:
+        cd = 0
+    elif cd == 10:
+        cd = 9
+    return cd == int(check)
+
+
+def _luhn_ok(number: str) -> bool:
+    digits = [int(c) for c in number]
+    if not (13 <= len(digits) <= 19):
+        return False
+    checksum = 0
+    parity = len(digits) % 2
+    for idx, d in enumerate(digits):
+        if idx % 2 == parity:
+            d *= 2
+            if d > 9:
+                d -= 9
+        checksum += d
+    return checksum % 10 == 0
+
+
+def _redact(s: str) -> str:
+    s = s.strip()
+    if len(s) <= 4:
+        return "****"
+    return s[:2] + "…" + s[-2:]
+
+
+def _is_test_data(rel: str, suffix: str) -> bool:
+    if TEST_HINT.search(rel):
+        return True
+    return suffix in {".csv", ".tsv", ".sql", ".ndjson"}
+
+
+def detect(root: Path, result: ScanResult, changed_files: set[str] | None = None) -> None:
+    for path in root.rglob("*"):
+        if path.is_dir() or any(p in _SKIP_DIRS for p in path.parts):
+            continue
+        suffix = path.suffix.lower()
+        if suffix not in DATA_SUFFIXES:
+            continue
+        rel = path.relative_to(root).as_posix()
+        if not _is_test_data(rel, suffix):
+            continue
+        if not result.should_scan(rel):
+            continue
+        try:
+            if path.stat().st_size > _MAX_BYTES:
+                continue
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except OSError:
+            continue
+
+        for i, ln in enumerate(lines, 1):
+            # CUIT/CUIL con validación de checksum.
+            for m in CUIT_RE.finditer(ln):
+                if _cuit_valid(m.group(1), m.group(2), m.group(3)):
+                    result.add(Finding(
+                        check_id="PII-001", domain="pii", severity=Severity.HIGH,
+                        title="CUIT/CUIL en datos de prueba",
+                        detail=f"{rel}:{i} contiene un CUIT/CUIL válido ({_redact(m.group(0))}).",
+                        file=rel, line=i,
+                        remediation="Reemplazar por datos sintéticos. No incluir PII real en "
+                                    "fixtures (baseline 1.06; Ley 25.326).",
+                        standards=[Standard.LEY_25326, Standard.BCRA],
+                        fingerprint=f"PII-001:{rel}:{i}",
+                    ))
+
+            # DNI: formato con puntos, o número con indicador de documento en la línea.
+            dni_hit = None
+            mdot = DNI_DOTTED_RE.search(ln)
+            if mdot:
+                dni_hit = mdot.group(0)
+            elif DNI_CONTEXT_RE.search(ln):
+                mnum = DNI_NUM_RE.search(ln)
+                if mnum:
+                    dni_hit = mnum.group(0)
+            if dni_hit:
+                result.add(Finding(
+                    check_id="PII-002", domain="pii", severity=Severity.HIGH,
+                    title="DNI en datos de prueba",
+                    detail=f"{rel}:{i} contiene un posible DNI ({_redact(dni_hit)}).",
+                    file=rel, line=i,
+                    remediation="Reemplazar por datos sintéticos. No incluir PII real en "
+                                "fixtures (baseline 1.06; Ley 25.326).",
+                    standards=[Standard.LEY_25326, Standard.BCRA],
+                    fingerprint=f"PII-002:{rel}:{i}",
+                ))
+
+            # Tarjeta con Luhn.
+            for m in CARD_RE.finditer(ln):
+                digits = re.sub(r"[ -]", "", m.group(0))
+                if _luhn_ok(digits):
+                    result.add(Finding(
+                        check_id="PII-003", domain="pii", severity=Severity.HIGH,
+                        title="Número de tarjeta en datos de prueba",
+                        detail=f"{rel}:{i} contiene un número que pasa Luhn ({_redact(digits)}).",
+                        file=rel, line=i,
+                        remediation="Usar PANs de test oficiales o datos sintéticos. No incluir "
+                                    "tarjetas reales (PCI-DSS; Ley 25.326).",
+                        standards=[Standard.LEY_25326, Standard.BCRA],
+                        fingerprint=f"PII-003:{rel}:{i}",
+                    ))
+                    break
+
+            # Email (más ruidoso => MEDIUM).
+            me = EMAIL_RE.search(ln)
+            if me and "example.com" not in me.group(0).lower():
+                result.add(Finding(
+                    check_id="PII-004", domain="pii", severity=Severity.MEDIUM,
+                    title="Email en datos de prueba",
+                    detail=f"{rel}:{i} contiene una dirección de email ({_redact(me.group(0))}).",
+                    file=rel, line=i,
+                    remediation="Preferir dominios de ejemplo (example.com) o datos sintéticos "
+                                "(baseline 1.06).",
+                    standards=[Standard.LEY_25326],
+                    fingerprint=f"PII-004:{rel}:{i}",
+                ))

@@ -1,0 +1,106 @@
+"""CLI de ai-scan.
+
+    python -m aiscan.cli scan <repo_path> [--manifest m.yaml] [--mode warn|enforce]
+                                           [--threshold blocker|high|medium]
+                                           [--reports-dir out/]
+                                           [--diff-base <ref>]
+
+--diff-base: en pipelines de merge request, restringe el análisis a los archivos
+cambiados respecto de esa referencia (p. ej. $CI_MERGE_REQUEST_DIFF_BASE_SHA). Esto
+evita que un MR sea bloqueado por deuda preexistente que no tocó. Si git no está
+disponible o la referencia no resuelve, cae a full-scan con un aviso.
+
+Exit code: 0 en modo warn. En enforce, 1 si se alcanza el umbral.
+"""
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+from . import __version__
+from .models import ScanResult, Severity
+from .detectors import ai_components, dependencies
+from .detectors import prompts, pii, secrets 
+from .policy import Mode, decide
+from . import report
+
+
+def compute_changed_files(repo: Path, base: str) -> set[str] | None:
+    """Devuelve el set de paths (posix, relativos al repo) cambiados vs `base`.
+
+    None => no se pudo determinar (git ausente, base inválida) => el llamador debe
+    hacer full-scan. Un set vacío es un resultado válido (MR sin archivos relevantes).
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(repo), "diff", "--name-only", "--diff-filter=d", base],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError):
+        print("ai-scan: git no disponible para --diff-base; full-scan.", file=sys.stderr)
+        return None
+    if out.returncode != 0:
+        print(f"ai-scan: no se pudo resolver --diff-base '{base}'; full-scan. "
+              f"({out.stderr.strip()[:120]})", file=sys.stderr)
+        return None
+    files = {ln.strip() for ln in out.stdout.splitlines() if ln.strip()}
+    return files
+
+
+def run_scan(repo: Path, manifest: dict | None = None,
+             changed_files: set[str] | None = None) -> ScanResult:
+    result = ScanResult(repo_path=str(repo))
+    result.changed_files = changed_files
+    # Orden: componentes primero (define si aplica el gate), luego el resto.
+    ai_components.detect(repo, result, changed_files)
+    dependencies.detect(repo, result, changed_files)
+    secrets.detect(repo, result, changed_files)
+    prompts.detect(repo, result, changed_files)
+    pii.detect(repo, result, changed_files)
+    return result
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="ai-scan",
+                                description="Escáner de seguridad para soluciones con IA.")
+    p.add_argument("command", choices=["scan"], help="Comando.")
+    p.add_argument("repo", type=Path, help="Ruta al repositorio.")
+    p.add_argument("--mode", choices=[m.value for m in Mode], default=Mode.WARN.value)
+    p.add_argument("--threshold", choices=["blocker", "high", "medium", "low"],
+                   default="blocker", help="Umbral de bloqueo en modo enforce.")
+    p.add_argument("--reports-dir", type=Path, default=Path("reports"))
+    p.add_argument("--diff-base", default=None,
+                   help="Referencia git: analiza sólo archivos cambiados vs esta base.")
+    p.add_argument("--quiet", action="store_true")
+    args = p.parse_args(argv)
+
+    if not args.repo.exists():
+        print(f"ai-scan: ruta no existe: {args.repo}", file=sys.stderr)
+        return 2
+
+    changed_files = None
+    if args.diff_base:
+        changed_files = compute_changed_files(args.repo, args.diff_base)
+        if changed_files is not None:
+            print(f"ai-scan: modo diff — {len(changed_files)} archivo(s) cambiado(s) "
+                  f"vs {args.diff_base[:12]}.")
+
+    result = run_scan(args.repo, changed_files)
+
+    if not args.quiet:
+        print(report.to_console(result))
+    report.write_reports(result, args.reports_dir)
+
+    mode = Mode(args.mode)
+    threshold = Severity(args.threshold)
+    code = decide(result, mode, threshold)
+    scope = "diff" if changed_files is not None else "full"
+    print(f"\nai-scan v{__version__} — modo={mode.value} scope={scope} "
+          f"max_sev={result.max_severity().value} exit={code}")
+    return code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,94 @@
+"""Detector de prompt templates del sistema (baseline 1.01).
+
+Análisis estático de riesgos en la construcción de prompts. Cubre dos cosas que el
+SAST genérico no entiende:
+
+  PR-001 (HIGH): input de usuario / contenido no confiable concatenado o interpolado
+                 dentro de un system/developer prompt. Es el vector clásico de prompt
+                 injection (OWASP LLM01): el atacante reescribe las instrucciones del
+                 sistema desde un campo de usuario.
+  PR-002 (MEDIUM): system prompt hardcodeado en el código (sin externalizar ni
+                 versionar). Dificulta la revisión y el control de cambios del prompt,
+                 que el baseline 1.01 exige.
+
+Es heurístico: en fase warn calibrar falsos positivos antes de bloquear.
+"""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from ..models import Finding, ScanResult, Severity, Standard
+
+PROMPT_ASSIGN = re.compile(
+    r"(?i)\b(system_prompt|system_message|sys_prompt|developer_prompt|"
+    r"system_instruction|systemprompt|system_msg)\b\s*[:=]")
+SYSTEM_ROLE = re.compile(
+    r"""(?ix) ["']?role["']?\s*[:=]\s*["'](system|developer)["'] """)
+USER_HINT = re.compile(
+    r"(?i)\b(user_?input|user_?message|user_?text|user_?query|user_?content|"
+    r"request|query|payload|body|params?|args?|question|message|msg|"
+    r"prompt_input|untrusted|external|incoming|raw_input)\b")
+FSTRING = re.compile(r"""(?i)(\bf["']|\.format\s*\(|%\s*[\(s])""")
+CONCAT = re.compile(r"\+\s*[A-Za-z_]\w*")
+TEMPLATE_JS = re.compile(r"`[^`]*\$\{")          # template literal JS/TS con interpolación
+TRIPLE = re.compile(r'("""|\'\'\')')
+LONG_LITERAL = re.compile(r"""["'].{40,}["']""")
+
+_SRC_SUFFIXES = {".py", ".js", ".ts", ".tsx", ".jsx"}
+_SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
+_MAX_BYTES = 2_000_000
+
+
+def detect(root: Path, result: ScanResult, changed_files: set[str] | None = None) -> None:
+    for path in root.rglob("*"):
+        if path.is_dir() or any(p in _SKIP_DIRS for p in path.parts):
+            continue
+        if path.suffix.lower() not in _SRC_SUFFIXES:
+            continue
+        rel = path.relative_to(root).as_posix()
+        if not result.should_scan(rel):
+            continue
+        try:
+            if path.stat().st_size > _MAX_BYTES:
+                continue
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except OSError:
+            continue
+
+        pr002_emitted = False
+        for i, ln in enumerate(lines, 1):
+            window = " ".join(lines[i - 1:i + 2])   # línea actual + 2 siguientes
+            is_prompt_ctx = bool(PROMPT_ASSIGN.search(ln) or SYSTEM_ROLE.search(window))
+            if not is_prompt_ctx:
+                continue
+
+            has_interp = bool(FSTRING.search(window) or CONCAT.search(window)
+                              or TEMPLATE_JS.search(window))
+            if has_interp and USER_HINT.search(window):
+                result.add(Finding(
+                    check_id="PR-001", domain="prompts", severity=Severity.HIGH,
+                    title="Input no confiable interpolado en el system prompt",
+                    detail=f"Construcción de prompt de sistema con dato de usuario/externo: "
+                           f"{ln.strip()[:120]}",
+                    file=rel, line=i,
+                    remediation="No concatenar input de usuario en el system prompt. Separar "
+                                "instrucciones (rol system) del contenido de usuario (rol user), "
+                                "delimitar el input y aplicar validación/guardrails. (baseline 1.01)",
+                    standards=[Standard.OWASP_LLM, Standard.NIST_AI_RMF],
+                    fingerprint=f"PR-001:{rel}:{i}",
+                ))
+            elif not pr002_emitted and PROMPT_ASSIGN.search(ln) and \
+                    (TRIPLE.search(window) or LONG_LITERAL.search(ln)):
+                pr002_emitted = True
+                result.add(Finding(
+                    check_id="PR-002", domain="prompts", severity=Severity.MEDIUM,
+                    title="System prompt hardcodeado sin versionar",
+                    detail=f"Prompt de sistema embebido en el código ({rel}:{i}). Dificulta "
+                           f"revisión y control de cambios del prompt.",
+                    file=rel, line=i,
+                    remediation="Externalizar el prompt a un archivo/recurso versionado y "
+                                "someterlo a revisión, según baseline 1.01.",
+                    standards=[Standard.NIST_AI_RMF, Standard.ISO_42001],
+                    fingerprint=f"PR-002:{rel}",
+                ))

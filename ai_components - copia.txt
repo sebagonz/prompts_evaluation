@@ -1,0 +1,166 @@
+"""Detección de componentes de IA en el repositorio.
+
+Es el DISPARADOR del gate: si no hay componentes de IA, el resto de los controles
+específicos de IA no aplican. Mapea a NIST AI RMF (función MAP — identificar el
+contexto y los componentes del sistema de IA).
+
+Detecta, leyendo el código fuente (no autodeclaraciones):
+  - SDKs de modelos/LLM (openai, anthropic, litellm, langchain, llamaindex, ...)
+  - Definiciones de tools / function-calling con potenciales side-effects
+  - Servidores/clientes MCP (Model Context Protocol)
+"""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Any
+
+from ..models import Finding, ScanResult, Severity, Standard
+
+# SDK -> (módulos import que delatan su uso)
+AI_SDKS: dict[str, list[str]] = {
+    "openai": ["openai"],
+    "anthropic": ["anthropic"],
+    "litellm": ["litellm"],
+    "langchain": ["langchain", "langchain_core", "langchain_community"],
+    "llamaindex": ["llama_index", "llamaindex"],
+    "transformers": ["transformers"],
+    "vllm": ["vllm"],
+    "google-genai": ["google.generativeai", "google.genai"],
+    "cohere": ["cohere"],
+    "mistralai": ["mistralai"],
+    "ollama": ["ollama"],
+    "haystack": ["haystack"],
+    "guardrails": ["guardrails"],     # guardrails-ai
+    "instructor": ["instructor"],
+}
+
+# Patrones de servidores/clientes MCP.
+MCP_PATTERNS = [
+    re.compile(r"\bmcp\.server\b"),
+    re.compile(r"from\s+mcp\b"),
+    re.compile(r"import\s+mcp\b"),
+    re.compile(r"\bFastMCP\b"),
+    re.compile(r"\bClientSession\b.*mcp", re.IGNORECASE),
+    re.compile(r"modelcontextprotocol", re.IGNORECASE),
+]
+
+# Heurística de tools con side-effects: nombres de funciones decoradas como tool
+# cuyo cuerpo toca recursos sensibles.
+TOOL_DECORATORS = [
+    re.compile(r"@tool\b"),
+    re.compile(r"@function_tool\b"),
+    re.compile(r"@mcp\.tool\b"),
+    re.compile(r'"type"\s*:\s*"function"'),     # OpenAI/Anthropic tool schema
+    re.compile(r"\btools\s*=\s*\["),
+]
+SIDE_EFFECT_HINTS = re.compile(
+    r"\b(requests\.(post|put|delete|patch)|subprocess|os\.system|os\.remove|"
+    r"shutil\.|open\([^)]*['\"][wa]|\.execute\(|cursor\.|boto3|paramiko|"
+    r"smtplib|send_email|transfer|payment|wire)\b",
+    re.IGNORECASE,
+)
+
+_SRC_SUFFIXES = {".py", ".js", ".ts", ".tsx", ".jsx", ".ipynb"}
+_SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
+
+
+def _iter_source_files(root: Path):
+    for p in root.rglob("*"):
+        if p.is_dir():
+            continue
+        if any(part in _SKIP_DIRS for part in p.parts):
+            continue
+        if p.suffix.lower() in _SRC_SUFFIXES:
+            yield p
+
+
+def detect(root: Path, result: ScanResult, changed_files: set[str] | None = None) -> None:
+    sdks_found: dict[str, list[str]] = {}
+    mcps_found: list[dict[str, Any]] = []
+    tools_found: list[dict[str, Any]] = []
+
+    for path in _iter_source_files(root):
+        rel = path.relative_to(root).as_posix()
+        if not result.should_scan(rel):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        lines = text.splitlines()
+
+        # --- SDKs ---
+        for sdk, modules in AI_SDKS.items():
+            for mod in modules:
+                # import mod  /  from mod import ...
+                if re.search(rf"^\s*(import\s+{re.escape(mod)}|from\s+{re.escape(mod)})",
+                             text, re.MULTILINE):
+                    sdks_found.setdefault(sdk, [])
+                    if rel not in sdks_found[sdk]:
+                        sdks_found[sdk].append(rel)
+
+        # --- MCP --- (dedupe por línea: varios patrones pueden matchear la misma)
+        mcp_lines: dict[int, str] = {}
+        for i, ln in enumerate(lines, 1):
+            if any(pat.search(ln) for pat in MCP_PATTERNS):
+                mcp_lines.setdefault(i, ln.strip()[:120])
+        for i, snippet in mcp_lines.items():
+            mcps_found.append({"file": rel, "line": i, "match": snippet})
+
+        # --- Tools con potenciales side-effects ---
+        has_tool_def = any(p.search(text) for p in TOOL_DECORATORS)
+        if has_tool_def:
+            for i, ln in enumerate(lines, 1):
+                if SIDE_EFFECT_HINTS.search(ln):
+                    tools_found.append({"file": rel, "line": i, "match": ln.strip()[:120]})
+
+    result.detected_components = {
+        "sdks": sdks_found,
+        "mcps": mcps_found,
+        "tools": tools_found,
+    }
+
+    # --- Findings informativos / de riesgo ---
+    if sdks_found:
+        sdk_list = ", ".join(sorted(sdks_found))
+        result.add(Finding(
+            check_id="AIC-001",
+            domain="ai_components",
+            severity=Severity.INFO,
+            title="Componentes de IA detectados",
+            detail=f"SDKs de IA en uso: {sdk_list}. El repo queda sujeto al gate de seguridad IA.",
+            remediation="Asegurar que el manifest declare estos componentes (reconciliación).",
+            standards=[Standard.NIST_AI_RMF],
+        ))
+
+    # MCP en general es superficie de ataque elevada (tool poisoning, prompt injection
+    # vía contexto externo). OWASP LLM señala tool/plugin abuse.
+    for m in mcps_found:
+        result.add(Finding(
+            check_id="AIC-002",
+            domain="ai_components",
+            severity=Severity.MEDIUM,
+            title="Uso de MCP detectado",
+            detail=f"Referencia a Model Context Protocol: {m['match']}",
+            file=m["file"], line=m["line"],
+            remediation="Validar provenance del servidor MCP, allowlist de tools y sandboxing. "
+                        "No permitir MCPs de terceros en prod sin excepción formal.",
+            standards=[Standard.OWASP_LLM, Standard.MITRE_ATLAS],
+            fingerprint=f"AIC-002:{m['file']}:{m['line']}",
+        ))
+
+    # Tools con side-effects sin contexto de auth detectable => alto riesgo.
+    for t in tools_found:
+        result.add(Finding(
+            check_id="AIC-003",
+            domain="ai_components",
+            severity=Severity.HIGH,
+            title="Tool con potencial side-effect",
+            detail=f"Función expuesta como tool con operación sensible: {t['match']}",
+            file=t["file"], line=t["line"],
+            remediation="Confirmar autenticación/autorización, validación de inputs y "
+                        "human-in-the-loop para acciones de escritura/transferencia.",
+            standards=[Standard.OWASP_LLM, Standard.MITRE_ATLAS],
+            fingerprint=f"AIC-003:{t['file']}:{t['line']}",
+        ))

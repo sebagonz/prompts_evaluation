@@ -1,0 +1,116 @@
+"""Salidas del escáner: consola, GitLab Code Quality y GitLab SAST.
+
+- Consola: legible para el dev en el log del job.
+- Code Quality (gl-code-quality-report.json): se muestra en el widget del MR.
+- SAST (gl-sast-report.json): alimenta el Security Dashboard / Vulnerability Report
+  (Ultimate). Mapeo de severidad al vocabulario de GitLab.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+
+from .models import ScanResult, Severity
+
+# ai-scan -> GitLab severity vocabulary.
+_GL_SEVERITY = {
+    Severity.BLOCKER: "Critical",
+    Severity.HIGH: "High",
+    Severity.MEDIUM: "Medium",
+    Severity.LOW: "Low",
+    Severity.INFO: "Info",
+}
+_CQ_SEVERITY = {
+    Severity.BLOCKER: "blocker",
+    Severity.HIGH: "critical",
+    Severity.MEDIUM: "major",
+    Severity.LOW: "minor",
+    Severity.INFO: "info",
+}
+
+
+def _fp(f) -> str:
+    base = f.fingerprint or f"{f.check_id}:{f.file}:{f.line}:{f.title}"
+    return hashlib.sha256(base.encode()).hexdigest()
+
+
+def to_console(result: ScanResult) -> str:
+    lines = [f"=== ai-scan — {result.repo_path} ==="]
+    comp = result.detected_components
+    if result.is_ai_solution():
+        lines.append(f"Componentes IA: SDKs={list(comp.get('sdks', {}))} "
+                     f"MCPs={len(comp.get('mcps', []))} tools={len(comp.get('tools', []))}")
+    else:
+        lines.append("No se detectaron componentes de IA — gate IA no aplica.")
+    lines.append("")
+    order = [Severity.BLOCKER, Severity.HIGH, Severity.MEDIUM, Severity.LOW, Severity.INFO]
+    counts = {s: len(result.by_severity(s)) for s in order}
+    lines.append("Resumen: " + "  ".join(f"{s.value}={counts[s]}" for s in order))
+    lines.append("")
+    for sev in order:
+        for f in result.by_severity(sev):
+            loc = f" [{f.file}:{f.line}]" if f.file else ""
+            std = " {" + ",".join(s.value for s in f.standards) + "}" if f.standards else ""
+            lines.append(f"[{sev.value.upper():7}] {f.check_id}{loc} {f.title}{std}")
+            lines.append(f"          {f.detail}")
+            if f.remediation:
+                lines.append(f"          → {f.remediation}")
+    return "\n".join(lines)
+
+
+def to_code_quality(result: ScanResult) -> list[dict]:
+    out = []
+    for f in result.findings:
+        entry = {
+            "description": f"[{f.check_id}] {f.title}: {f.detail}",
+            "check_name": f.check_id,
+            "fingerprint": _fp(f),
+            "severity": _CQ_SEVERITY[f.severity],
+            "location": {"path": f.file or "REPO", "lines": {"begin": f.line or 1}},
+        }
+        out.append(entry)
+    return out
+
+
+def to_sast(result: ScanResult) -> dict:
+    vulns = []
+    for f in result.findings:
+        vulns.append({
+            "id": _fp(f),
+            "category": "sast",
+            "name": f.title,
+            "message": f.title,
+            "description": f"{f.detail}\n\nRemediación: {f.remediation}\n"
+                           f"Estándares: {', '.join(s.value for s in f.standards)}",
+            "severity": _GL_SEVERITY[f.severity],
+            "scanner": {"id": "ai-scan", "name": "ai-scan"},
+            "location": {"file": f.file or "REPO",
+                         "start_line": f.line or 1},
+            "identifiers": [{
+                "type": "ai-scan",
+                "name": f.check_id,
+                "value": f.check_id,
+            }],
+        })
+    return {
+        "version": "15.0.0",
+        "scan": {
+            "scanner": {"id": "ai-scan", "name": "ai-scan",
+                        "version": "0.1.0", "vendor": {"name": "Seguridad IA"}},
+            "type": "sast",
+            "status": "success",
+        },
+        "vulnerabilities": vulns,
+    }
+
+
+def write_reports(result: ScanResult, out_dir: Path) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "gl-code-quality-report.json").write_text(
+        json.dumps(to_code_quality(result), indent=2), encoding="utf-8")
+    (out_dir / "gl-sast-report.json").write_text(
+        json.dumps(to_sast(result), indent=2), encoding="utf-8")
+    (out_dir / "ai-scan-findings.json").write_text(
+        json.dumps([f.to_dict() for f in result.findings], indent=2,
+                   ensure_ascii=False), encoding="utf-8")
