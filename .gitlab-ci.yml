@@ -8,6 +8,8 @@ variables:
 
   CI_REPO_IMAGE_NAME: "plataformas/prompt-scanner"
   CI_REPO_IMAGE_TAG: "1.0.1" # Nueva imagen que publicarás en Harbor
+  DC_IMAGE_BUILD: "pipeline-tools/python:ubuntu-20.04-python3"
+  
 
   # Debe ser una imagen interna con sonar-scanner instalado.
   # Reemplazar tag/nombre por el homologado por el banco.
@@ -44,7 +46,7 @@ sonar_prompt_security_publish:
   stage: sonar_publish
 
   image:
-    name: "${SONAR_SCANNER_IMAGE}"
+    name: "registry.intranet.local:5000/${DC_IMAGE_BUILD}"
     entrypoint: [""]
 
   # Descarga reports/ generado por el job anterior.

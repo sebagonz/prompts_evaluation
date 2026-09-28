@@ -1,59 +1,85 @@
-# ai-scan — Gate 2 (Commit) del ciclo de controles de seguridad IA
+# POC local — Control 1.01 sin LLM
 
-Escáner que corre en el pipeline de la plataforma de CI/CD y verifica los controles de seguridad IA del baseline
+Analizador local de prompts `.txt` y `.md`. Ejecuta PromptSonar y
+`prompt-injection-auditor` dentro de un contenedor Linux, sin LLM, GPU ni API
+keys. La interfaz de este POC es la consola: no incluye GUI web ni puertos
+expuestos.
 
-Forma la capa específica de IA del **Gate 2**, junto con dos capas nativas:
+## Portabilidad
 
-| Capa | Provee | Qué cubre |
-|------|--------|-----------|
-| SAST nativo | Plataforma de CI/CD | Patrones inseguros en el código fuente. |
-| Secret Detection nativo | Plataforma de CI/CD (motor gitleaks gestionado) | Secretos genéricos, con ciclo de vida de vulnerabilidades para auditoría. |
-| `ai-scan` | Desarrollo propio | Lo específico de IA que lo nativo no entiende. |
+El host sólo necesita un motor de contenedores que ejecute imágenes Linux y
+Docker Compose compatible con la Compose Specification. La distribución del
+host (macOS, SUSE/SLES u otra Linux) no forma parte de la imagen: Node.js,
+Python, Git y los scanners están dentro del contenedor.
 
-> `ai-scan` mantiene `SEC-001` sólo para claves de IA/gateway, con contexto de dominio y mapeo regulatorio.
-
-## Fase actual: WARN (no bloqueante)
-
-`ai-scan` corre con `allow_failure: true` y `--mode warn` (exit 0 siempre).
-Reporta findings con severidad pero no bloquea el merge, para calibrar falsos positivos antes de hacerlo mandatorio.
-El paso a `enforce` está documentado en `.gitlab-ci.yml`.
-
-## Modo diff-aware (pre-merge)
-
-En pipelines de merge request, `ai-scan` analiza sólo los archivos cambiados respecto de la base del MR (`--diff-base $CI_MERGE_REQUEST_DIFF_BASE_SHA`). 
-Así un MR no se bloquea por deuda preexistente que no tocó. 
-En la rama por defecto hace full-scan, que es la foto de baseline de la solución.
-Si git no está disponible o la base no resuelve, cae a full-scan con un aviso.
-
-## Controles implementados
-
-| ID      | Dominio          | Qué verifica                                              | Gap / Estándar                |
-|---------|------------------|----------------------------------------------------------|-------------------------------|
-| AIC-001 | ai_components    | Detecta SDKs de IA (disparador del gate)                 | NIST AI RMF (MAP)             |
-| AIC-002 | ai_components    | Uso de MCP                                                | OWASP LLM, MITRE ATLAS        |
-| AIC-003 | ai_components    | Tools con side-effects                                   | OWASP LLM, MITRE ATLAS        |
-| PR-001  | prompts          | **Input no confiable interpolado en el system prompt**   | Baseline 1.01, OWASP LLM01    |
-| PR-002  | prompts          | System prompt hardcodeado sin versionar                  | Baseline 1.01                 |
-| PII-001 | pii              | **CUIT/CUIL válido** (checksum mod 11) en datos de prueba | Baseline 1.06, Ley 25.326     |
-| PII-002 | pii              | DNI en datos de prueba                                    | Baseline 1.06, Ley 25.326     |
-| PII-003 | pii              | Tarjeta (Luhn) en datos de prueba                         | Baseline 1.06, PCI-DSS        |
-| PII-004 | pii              | Email en datos de prueba                                  | Baseline 1.06, Ley 25.326     |
-| SEC-001 | secrets          | Keys de modelos/gateway hardcodeadas                     | Ley 25.326, BCRA              |
-
-## Uso local
+En el laboratorio SUSE, validar antes de ejecutar:
 
 ```bash
-pip install -r requirements.txt
-python -m aiscan.cli scan /ruta/al/repo                              # full-scan (warn)
-python -m aiscan.cli scan /ruta/al/repo --diff-base origin/main      # sólo cambios
-python -m aiscan.cli scan /ruta/al/repo --mode enforce --threshold blocker   # fase 2
+docker version
+docker compose version
+docker info --format '{{.OSType}}'
 ```
 
-Genera en `reports/`:
-- `ai-scan-findings.json` — findings crudos.
-- `gl-code-quality-report.json` — widget del MR.
-- `gl-sast-report.json` — **Security Dashboard / Vulnerability Report**.
+El último comando debe devolver `linux`. Si el laboratorio usa Podman en vez
+de Docker, se requiere que su integración Compose sea compatible; validar el
+comando `compose config` indicado abajo antes de correr el POC.
 
-## Integración con la plataforma de CI/CD
+## Ejecución
 
-Ver `.gitlab-ci.yml`. Incluye las plantillas nativas de SAST y Secret Detection, y el job `ai-scan` (diff-aware en MR, full en default branch). 
+Desde la raíz del repositorio:
+
+```bash
+mkdir -p reports
+LOCAL_UID="$(id -u)" LOCAL_GID="$(id -g)" docker compose build
+LOCAL_UID="$(id -u)" LOCAL_GID="$(id -g)" docker compose run --rm prompt-security
+```
+
+El mapeo de UID/GID evita que los archivos de `reports/` queden propiedad de
+root en SUSE/Linux. En macOS también es seguro usar los mismos comandos.
+
+Para un archivo puntual:
+
+```bash
+LOCAL_UID="$(id -u)" LOCAL_GID="$(id -g)" \
+  docker compose run --rm prompt-security prompts/vulnerable_prompt.txt
+```
+
+Los reportes se escriben en `reports/`:
+
+```text
+*-promptsonar.json
+*-promptsonar.sarif
+*-pi-auditor.json
+```
+
+Un código distinto de cero puede significar que hubo hallazgos; verificar los
+archivos de salida antes de considerarlo un fallo técnico.
+
+## Red corporativa y certificados
+
+El build descarga dependencias npm y el auditor desde GitHub. Para este POC de
+laboratorio, la validación TLS de npm y Git está desactivada por defecto para
+permitir redes que inspeccionan SSL.
+
+Cuando se incorpore este flujo a una solución de desarrollo, se debe revertir
+esa excepción, instalar el certificado raíz corporativo y construir con TLS
+habilitado:
+
+```bash
+LOCAL_UID="$(id -u)" LOCAL_GID="$(id -g)" \
+  docker compose build --build-arg NPM_STRICT_SSL=true --build-arg GIT_SSL_VERIFY=true
+```
+
+Si el laboratorio no tiene salida a npm/GitHub, construir la imagen en un
+entorno autorizado y transferirla como artefacto OCI con
+`docker save` / `docker load`; Git por sí solo no elimina esas descargas del
+build.
+
+## Reproducibilidad y límites
+
+PromptSonar está fijado en la versión `1.5.1`. El auditor externo conserva un
+parámetro de build (`AUDITOR_REF`) que hoy apunta a `main`; antes de llevarlo a
+una solución de desarrollo debe fijarse a un commit o tag revisado y conservar
+la procedencia/SBOM de la imagen. Este POC no implementa CI/CD, policy gates,
+waivers ni gestión corporativa de vulnerabilidades.
+ 
