@@ -6,6 +6,7 @@ REPORTS_DIR="${REPORTS_DIR:-reports}"
 AUDITOR="${AUDITOR:-/opt/prompt-injection-auditor/scripts/pi_scan.py}"
 PI_AUDITOR_TO_SARIF="${PI_AUDITOR_TO_SARIF:-/usr/local/bin/pi-auditor-to-sarif}"
 SCAN_SUMMARY="${SCAN_SUMMARY:-/usr/local/bin/build-scan-summary}"
+SARIF_MERGER="${SARIF_MERGER:-/usr/local/bin/merge-sarif-reports}"
 # GitLab ejecuta los jobs desde $CI_PROJECT_DIR, no desde el WORKDIR de la
 # imagen. PromptSonar se instala durante el build en este directorio.
 PROMPTSONAR_PROJECT_DIR="${PROMPTSONAR_PROJECT_DIR:-/workspace}"
@@ -94,6 +95,10 @@ fi
 findings_detected=0
 execution_errors=0
 summary_args=()
+sarif_args=()
+unified_sarif="${REPORTS_DIR}/prompt-security-scan.sarif"
+sarif_work_dir="$(mktemp -d "${TMPDIR:-/tmp}/prompt-security-sarif.XXXXXX")"
+trap 'rm -rf "${sarif_work_dir}"' EXIT
 
 run_promptsonar() {
   if [ ! -d "${PROMPTSONAR_PROJECT_DIR}/node_modules/@promptsonar/cli" ]; then
@@ -195,15 +200,18 @@ for prompt_file in "${PROMPT_FILES[@]}"; do
   safe_name="${safe_name%.*}"
 
   promptsonar_json="${REPORTS_DIR}/${safe_name}-promptsonar.json"
-  promptsonar_sarif="${REPORTS_DIR}/${safe_name}-promptsonar.sarif"
+  promptsonar_sarif="${sarif_work_dir}/${safe_name}-promptsonar.sarif"
   auditor_json="${REPORTS_DIR}/${safe_name}-pi-auditor.json"
-  auditor_sarif="${REPORTS_DIR}/${safe_name}-pi-auditor.sarif"
+  auditor_sarif="${sarif_work_dir}/${safe_name}-pi-auditor.sarif"
   prompt_findings_detected=0
   prompt_execution_errors=0
 
   # Evita que un reporte de una ejecución previa haga parecer exitoso a un
   # scanner que falló antes de generar su salida actual.
-  rm -f "${promptsonar_json}" "${promptsonar_sarif}" "${auditor_json}" "${auditor_sarif}"
+  rm -f "${promptsonar_json}" "${auditor_json}" \
+    "${REPORTS_DIR}/${safe_name}-promptsonar.sarif" \
+    "${REPORTS_DIR}/${safe_name}-pi-auditor.sarif" \
+    "${unified_sarif}"
 
   echo "========================================"
   echo "PROMPT: ${prompt_file}"
@@ -275,8 +283,25 @@ for prompt_file in "${PROMPT_FILES[@]}"; do
     prompt_result="PASS"
   fi
   summary_args+=(--report-pair "${prompt_file}" "${promptsonar_json}" "${auditor_json}" "${prompt_result}")
+  if [ -s "${promptsonar_sarif}" ] && [ -s "${auditor_sarif}" ]; then
+    sarif_args+=(--input "${promptsonar_sarif}" --input "${auditor_sarif}")
+  fi
   echo ""
 done
+
+echo "========================================"
+echo " CONSOLIDATING SARIF REPORTS"
+echo "========================================"
+
+if [ "${execution_errors}" -eq 0 ]; then
+  python3 "${SARIF_MERGER}" --output "${unified_sarif}" "${sarif_args[@]}"
+  if [ "$?" -ne 0 ]; then
+    echo "ERROR: unified SARIF could not be generated." >&2
+    execution_errors=1
+  fi
+else
+  echo "Skipping unified SARIF because one or more scanners had execution errors." >&2
+fi
 
 echo "========================================"
 echo " SCAN COMPLETE"
@@ -299,7 +324,7 @@ fi
 
 pi_auditor_revision="$(git -C /opt/prompt-injection-auditor rev-parse --short HEAD 2>/dev/null || echo unknown)"
 python3 "${SCAN_SUMMARY}" \
-  --output "${REPORTS_DIR}/scan-summary.json" \
+  --output "${REPORTS_DIR}/prompt-security-scan-summary.json" \
   --target "${TARGET}" \
   --promptsonar-fail-on "${PROMPTSONAR_FAIL_ON}" \
   --exit-on-findings "${EXIT_ON_FINDINGS}" \

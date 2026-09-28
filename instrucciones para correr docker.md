@@ -27,11 +27,11 @@ LOCAL_UID="$(id -u)" LOCAL_GID="$(id -g)" \
 Los resultados quedan en `reports/`. Un retorno no cero puede indicar findings
 del análisis; revisar JSON/SARIF y no sólo el código de salida.
 
-Además de los SARIF de PromptSonar, el contenedor genera
-`*-pi-auditor.sarif`, listo para importarse como external issue en SonarQube:
+El contenedor consolida los resultados de PromptSonar y pi-auditor en un único
+SARIF, listo para importarse como external issue en SonarQube:
 
 ```bash
-sonar-scanner -Dsonar.sarifReportPaths=reports/prompts-vulnerable_prompt-pi-auditor.sarif
+sonar-scanner -Dsonar.sarifReportPaths=reports/prompt-security-scan.sarif
 ```
 
 Para este POC la validación TLS de npm y Git está desactivada durante el build,

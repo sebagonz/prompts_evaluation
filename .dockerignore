@@ -3,3 +3,4 @@ reports
 .git
 .DS_Store
 npm-debug.log
+.gitlab-ci.yml

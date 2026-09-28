@@ -48,16 +48,15 @@ Los reportes se escriben en `reports/`:
 
 ```text
 *-promptsonar.json
-*-promptsonar.sarif
 *-pi-auditor.json
-*-pi-auditor.sarif
-scan-summary.json
+prompt-security-scan.sarif
+prompt-security-scan-summary.json
 ```
 
 Un código distinto de cero puede significar que hubo hallazgos; verificar los
 archivos de salida antes de considerarlo un fallo técnico.
 
-`scan-summary.json` reúne por prompt los conteos de severidad de PromptSonar y
+`prompt-security-scan-summary.json` reúne por prompt los conteos de severidad de PromptSonar y
 pi-auditor, la política aplicada, versiones disponibles y el resultado
 `PASS`, `BLOCK` o `ERROR`. El mismo resumen se imprime al final de stdout.
 
@@ -91,8 +90,10 @@ waivers ni gestión corporativa de vulnerabilidades.
 
 ### Exportar el resultado de pi-auditor a SonarQube
 
-El contenedor convierte automáticamente cada reporte `*-pi-auditor.json` a
-SARIF 2.1.0. También puede ejecutarse de forma independiente:
+El contenedor convierte internamente cada reporte `*-pi-auditor.json` a SARIF
+2.1.0 y consolida esos resultados con los de PromptSonar en
+`reports/prompt-security-scan.sarif`. El conversor individual puede ejecutarse sólo
+para diagnóstico:
 
 ```bash
 python3 scripts/pi_auditor_to_sarif.py \
@@ -100,12 +101,12 @@ python3 scripts/pi_auditor_to_sarif.py \
   --output reports/prompts-vulnerable_prompt-pi-auditor.sarif
 ```
 
-Para importar uno o más reportes con SonarScanner, indicar las rutas relativas
+Para importar el reporte consolidado con SonarScanner, indicar su ruta relativa
 al directorio base del análisis:
 
 ```bash
 sonar-scanner \
-  -Dsonar.sarifReportPaths=reports/prompts-vulnerable_prompt-pi-auditor.sarif
+  -Dsonar.sarifReportPaths=reports/prompt-security-scan.sarif
 ```
 
 SonarQube registra estos resultados como external issues; no forman parte de

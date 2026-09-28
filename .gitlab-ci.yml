@@ -1,0 +1,79 @@
+stages:
+  - prompt_security
+  - sonar_publish
+
+variables:
+  REGISTRY: "registry.intranet.local:5000"
+  PROMPTS_DIR: "prompts"
+
+  CI_REPO_IMAGE_NAME: "plataformas/prompt-scanner"
+  CI_REPO_IMAGE_TAG: "1.0.1" # Nueva imagen que publicarás en Harbor
+
+  # Debe ser una imagen interna con sonar-scanner instalado.
+  # Reemplazar tag/nombre por el homologado por el banco.
+  SONAR_SCANNER_IMAGE: "registry.intranet.local:5000/plataformas/sonar-scanner-cli:latest"
+
+  # Variables SONAR_SERVER y SONAR_TOKEN: definirlas en GitLab como
+  # variables protegidas y enmascaradas, no en este archivo.
+  SONAR_QUALITY_GATE_WAIT: "true"
+  SONAR_QUALITY_GATE_TIMEOUT: "600"
+
+  # En esta etapa mantiene evidencia y permite que Sonar procese hallazgos.
+  EXIT_ON_FINDINGS: "false"
+
+prompt_security_scan:
+  stage: prompt_security
+
+  image:
+    name: "${REGISTRY}/${CI_REPO_IMAGE_NAME}:${CI_REPO_IMAGE_TAG}"
+    entrypoint: [""]
+
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - mkdir -p reports
+    - export REPORTS_DIR="$CI_PROJECT_DIR/reports"
+    - scan-prompts "$PROMPTS_DIR"
+
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - reports/
+
+sonar_prompt_security_publish:
+  stage: sonar_publish
+
+  image:
+    name: "${SONAR_SCANNER_IMAGE}"
+    entrypoint: [""]
+
+  # Descarga reports/ generado por el job anterior.
+  needs:
+    - job: prompt_security_scan
+      artifacts: true
+
+  # Publica la evidencia aun si en el futuro el scan bloquea por findings.
+  when: always
+
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
+    GIT_DEPTH: "0"
+
+  cache:
+    key: "sonar-${CI_PROJECT_ID}"
+    paths:
+      - .sonar/cache
+
+  script:
+    - test -s "$CI_PROJECT_DIR/reports/prompt-security-scan.sarif"
+    - |
+      sonar-scanner \
+        -Dsonar.host.url="$SONAR_SERVER" \
+        -Dsonar.token="$SONAR_TOKEN" \
+        -Dsonar.projectKey="${CI_PROJECT_NAMESPACE}:${CI_PROJECT_NAME}" \
+        -Dsonar.projectVersion="${PROJECT_VERSION:-$CI_COMMIT_SHORT_SHA}" \
+        -Dsonar.projectBaseDir="$CI_PROJECT_DIR" \
+        -Dsonar.sources="$PROMPTS_DIR" \
+        -Dsonar.sarifReportPaths="reports/prompt-security-scan.sarif" \
+        -Dsonar.qualitygate.wait="$SONAR_QUALITY_GATE_WAIT" \
+        -Dsonar.qualitygate.timeout="$SONAR_QUALITY_GATE_TIMEOUT"
