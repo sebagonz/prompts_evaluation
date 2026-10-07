@@ -1,4 +1,4 @@
 reports/*
 !reports/.gitkeep
-__pycache__/
-*.pyc
+*bck
+*.docx

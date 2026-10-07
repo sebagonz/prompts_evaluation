@@ -12,4 +12,7 @@ services:
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     environment:
       REPORTS_DIR: /workspace/reports
+      FAIL_ON: ${FAIL_ON:-critical}
+      PROMPTSONAR_SONAR_CATEGORIES: ${PROMPTSONAR_SONAR_CATEGORIES:-security}
+      EXIT_ON_FINDINGS: ${EXIT_ON_FINDINGS:-true}
     command: ["prompts"]

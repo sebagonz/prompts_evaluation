@@ -24,10 +24,8 @@ RUN npm config set strict-ssl "${NPM_STRICT_SSL}" \
 RUN git -c http.sslVerify="${GIT_SSL_VERIFY}" clone --depth 1 --branch "${AUDITOR_REF}" "${AUDITOR_REPO}" /opt/prompt-injection-auditor
 
 COPY scripts/scan-prompts.sh /usr/local/bin/scan-prompts
-COPY scripts/pi_auditor_to_sarif.py /usr/local/bin/pi-auditor-to-sarif
-COPY scripts/build_scan_summary.py /usr/local/bin/build-scan-summary
-COPY scripts/merge_sarif_reports.py /usr/local/bin/merge-sarif-reports
-RUN chmod 0555 /usr/local/bin/scan-prompts /usr/local/bin/pi-auditor-to-sarif /usr/local/bin/build-scan-summary /usr/local/bin/merge-sarif-reports
+COPY scripts/consolidate_scan_reports.py /usr/local/bin/consolidate-scan-reports
+RUN chmod 0555 /usr/local/bin/scan-prompts /usr/local/bin/consolidate-scan-reports
 
 # El usuario efectivo se puede reemplazar desde Compose por el UID/GID del
 # operador para que los reportes montados queden accesibles en Linux/SUSE.

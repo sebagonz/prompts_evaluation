@@ -1,0 +1,11 @@
+waivers:
+  - id: WVR-2026-001
+    status: active
+    scope:
+      rule_id: sec_rag_injection
+      path: hardest_prompt.txt
+    justification: >-
+      En este prompt {{USER_INPUT}} es un bloque de datos no confiables para
+      responder preguntas; no se utiliza como consulta de recuperación. Revisar
+      esta excepción si la aplicación incorpora RAG o herramientas de búsqueda.
+    expires_at: 2027-01-06

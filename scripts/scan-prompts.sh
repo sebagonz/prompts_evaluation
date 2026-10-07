@@ -4,9 +4,7 @@ set -u
 TARGET="${1:-prompts}"
 REPORTS_DIR="${REPORTS_DIR:-reports}"
 AUDITOR="${AUDITOR:-/opt/prompt-injection-auditor/scripts/pi_scan.py}"
-PI_AUDITOR_TO_SARIF="${PI_AUDITOR_TO_SARIF:-/usr/local/bin/pi-auditor-to-sarif}"
-SCAN_SUMMARY="${SCAN_SUMMARY:-/usr/local/bin/build-scan-summary}"
-SARIF_MERGER="${SARIF_MERGER:-/usr/local/bin/merge-sarif-reports}"
+CONSOLIDATOR="${CONSOLIDATOR:-/usr/local/bin/consolidate-scan-reports}"
 # GitLab ejecuta los jobs desde $CI_PROJECT_DIR, no desde el WORKDIR de la
 # imagen. PromptSonar se instala durante el build en este directorio.
 PROMPTSONAR_PROJECT_DIR="${PROMPTSONAR_PROJECT_DIR:-/workspace}"
@@ -16,20 +14,40 @@ PROMPTSONAR_PROJECT_DIR="${PROMPTSONAR_PROJECT_DIR:-/workspace}"
 # false -> el script genera reportes, pero retorna 0 aunque haya findings.
 EXIT_ON_FINDINGS="${EXIT_ON_FINDINGS:-true}"
 
-# Política de PromptSonar. Debe coincidir con los valores admitidos por su CLI.
-# Ejemplos habituales: critical, high, medium, low, none.
-PROMPTSONAR_FAIL_ON="${PROMPTSONAR_FAIL_ON:-critical}"
+# Umbral único para el gate y el SARIF final.
+FAIL_ON="${FAIL_ON:-critical}"
+FAIL_ON="${FAIL_ON,,}"
 
 # Opcionales. Déjalos vacíos si no los usas.
 PROMPTSONAR_WAIVER="${PROMPTSONAR_WAIVER:-}"
 PROMPTSONAR_POLICY_FILE="${PROMPTSONAR_POLICY_FILE:-}"
-
-mkdir -p "${REPORTS_DIR}"
+# Categorías de PromptSonar que se publican en Sonar; el JSON conserva todas.
+PROMPTSONAR_SONAR_CATEGORIES="${PROMPTSONAR_SONAR_CATEGORIES:-security}"
 
 if [ ! -e "${TARGET}" ]; then
   echo "ERROR: target not found: ${TARGET}" >&2
   exit 2
 fi
+
+# El job de GitLab monta el repositorio en $CI_PROJECT_DIR, mientras que las
+# dependencias de PromptSonar viven en /workspace dentro de la imagen. Como la
+# CLI se ejecuta desde ese último directorio, las rutas relativas del repositorio
+# dejarían de apuntar a los prompts. Normalizamos las rutas antes de cambiar de
+# directorio para que ambos scanners lean el mismo archivo del checkout.
+SCAN_WORK_DIR="$(pwd -P)"
+TARGET_DISPLAY="${TARGET}"
+if [ -d "${TARGET}" ]; then
+  TARGET="$(cd "${TARGET}" && pwd -P)"
+else
+  target_dir="$(dirname "${TARGET}")"
+  target_base="$(basename "${TARGET}")"
+  TARGET="$(cd "${target_dir}" && printf '%s/%s\n' "$(pwd -P)" "${target_base}")"
+fi
+
+mkdir -p "${REPORTS_DIR}"
+reports_dir_parent="$(dirname "${REPORTS_DIR}")"
+reports_dir_base="$(basename "${REPORTS_DIR}")"
+REPORTS_DIR="$(cd "${reports_dir_parent}" && printf '%s/%s\n' "$(pwd -P)" "${reports_dir_base}")"
 
 case "${EXIT_ON_FINDINGS}" in
   true|false)
@@ -40,12 +58,21 @@ case "${EXIT_ON_FINDINGS}" in
     ;;
 esac
 
+case "${FAIL_ON}" in
+  critical|high|medium|low|none) ;;
+  *)
+    echo "ERROR: FAIL_ON must be critical, high, medium, low or none; received: ${FAIL_ON}" >&2
+    exit 2
+    ;;
+esac
+
 echo "========================================"
 echo " PROMPT SECURITY LOCAL SCAN"
 echo "========================================"
-echo "Target              : ${TARGET}"
+echo "Target              : ${TARGET_DISPLAY}"
 echo "Reports             : ${REPORTS_DIR}"
-echo "PromptSonar fail-on : ${PROMPTSONAR_FAIL_ON}"
+echo "Umbral único FAIL_ON: ${FAIL_ON} (none = publicar todo sin bloquear)"
+echo "Sonar categories    : ${PROMPTSONAR_SONAR_CATEGORIES}"
 echo "Exit on findings    : ${EXIT_ON_FINDINGS}"
 echo ""
 
@@ -81,8 +108,8 @@ fi
 # ANÁLISIS A — PromptSonar:
 # detección estática de injection/jailbreak, obfuscación, secretos/PII,
 # context isolation, workflow escalation y privileged sinks.
-# El umbral se aplica tanto a JSON como a SARIF.
-promptsonar_args=(--fail-on "${PROMPTSONAR_FAIL_ON}")
+# La CLI sólo genera evidencia; el gate común aplica FAIL_ON a ambos JSON.
+promptsonar_args=(--fail-on none)
 
 if [ -n "${PROMPTSONAR_WAIVER}" ]; then
   promptsonar_args+=(--waiver "${PROMPTSONAR_WAIVER}")
@@ -92,11 +119,11 @@ if [ -n "${PROMPTSONAR_POLICY_FILE}" ]; then
   promptsonar_args+=(--policy-file "${PROMPTSONAR_POLICY_FILE}")
 fi
 
-findings_detected=0
 execution_errors=0
-summary_args=()
-sarif_args=()
+report_args=()
+governance_args=()
 unified_sarif="${REPORTS_DIR}/prompt-security-scan.sarif"
+summary_json="${REPORTS_DIR}/prompt-security-scan-summary.json"
 sarif_work_dir="$(mktemp -d "${TMPDIR:-/tmp}/prompt-security-sarif.XXXXXX")"
 trap 'rm -rf "${sarif_work_dir}"' EXIT
 
@@ -117,74 +144,38 @@ record_step_status() {
   local step_name="$1"
   local status="$2"
   local report_path="$3"
-  local findings_are_valid="$4"
+  local scanner_kind="$4"
 
-  # Un status 1 sólo es un finding si el scanner dejó evidencia del análisis.
+  # PromptSonar ejecuta con --fail-on none; un código no cero indica error o
+  # incumplimiento de una policy-file externa. El auditor usa 1 para findings.
   # Sin reporte, normalmente es una dependencia ausente, argumento inválido o
   # error de ejecución; no debe confundirse con un hallazgo de seguridad.
   if [ ! -s "${report_path}" ]; then
     execution_errors=1
-    prompt_execution_errors=1
     echo "ERROR: ${step_name}: no report was generated at ${report_path} (exit code ${status})." >&2
     return
   fi
 
   case "${status}" in
     0)
-      echo "${step_name}: completed with no blocking findings."
+      echo "${step_name}: report generated."
       ;;
     1)
-      if [ "${findings_are_valid}" = "true" ]; then
-        findings_detected=1
-        prompt_findings_detected=1
-        echo "${step_name}: blocking findings detected (exit code 1)."
+      if [ "${scanner_kind}" = "auditor" ]; then
+        echo "${step_name}: scanner reported findings (exit code 1)."
+      elif [ "${scanner_kind}" = "promptsonar" ] && [ -n "${PROMPTSONAR_POLICY_FILE}" ]; then
+        prompt_governance_failed=1
+        echo "${step_name}: PromptSonar governance policy failed (exit code 1)."
       else
         execution_errors=1
-        prompt_execution_errors=1
         echo "ERROR: ${step_name}: unexpected exit code 1." >&2
       fi
       ;;
     *)
       execution_errors=1
-      prompt_execution_errors=1
       echo "ERROR: ${step_name}: execution failed (exit code ${status})." >&2
       ;;
   esac
-}
-
-print_promptsonar_findings() {
-  local report_path="$1"
-
-  # PromptSonar deja el detalle de findings en JSON. Lo mostramos una vez,
-  # después de su salida JSON, con prefijo inequívoco para el log de CI.
-  python3 - "${report_path}" <<'PY'
-import json
-import sys
-
-path = sys.argv[1]
-try:
-    with open(path, encoding="utf-8") as report_file:
-        report = json.load(report_file)
-except (OSError, json.JSONDecodeError) as error:
-    print(f"[PROMPTSONAR] WARNING: cannot summarize findings: {error}")
-    raise SystemExit(0)
-
-findings = report.get("findings", [])
-if not isinstance(findings, list) or not findings:
-    print("[PROMPTSONAR] Findings: none")
-    raise SystemExit(0)
-
-print(f"[PROMPTSONAR] Findings reported: {len(findings)}")
-for finding in findings:
-    if not isinstance(finding, dict):
-        continue
-    severity = str(finding.get("severity", "unknown")).upper()
-    rule_id = str(finding.get("rule_id", "unknown-rule"))
-    line = finding.get("line")
-    location = f" line {line}" if isinstance(line, int) and line > 0 else ""
-    message = " ".join(str(finding.get("message", "No message")).split())
-    print(f"[PROMPTSONAR][{severity}][{rule_id}]{location}: {message}")
-PY
 }
 
 for prompt_file in "${PROMPT_FILES[@]}"; do
@@ -193,8 +184,12 @@ for prompt_file in "${PROMPT_FILES[@]}"; do
     continue
   fi
 
+  # Mantiene nombres de artefacto legibles (p. ej. prompts/foo-promptsonar)
+  # aunque PromptSonar reciba la ruta absoluta requerida dentro de la imagen.
+  prompt_file_display="${prompt_file#"${SCAN_WORK_DIR}/"}"
+
   safe_name="$(
-    echo "${prompt_file}" |
+    echo "${prompt_file_display}" |
       sed 's#^\./##; s#[/ ]#-#g; s#[^A-Za-z0-9._-]#_#g'
   )"
   safe_name="${safe_name%.*}"
@@ -202,157 +197,71 @@ for prompt_file in "${PROMPT_FILES[@]}"; do
   promptsonar_json="${REPORTS_DIR}/${safe_name}-promptsonar.json"
   promptsonar_sarif="${sarif_work_dir}/${safe_name}-promptsonar.sarif"
   auditor_json="${REPORTS_DIR}/${safe_name}-pi-auditor.json"
-  auditor_sarif="${sarif_work_dir}/${safe_name}-pi-auditor.sarif"
-  prompt_findings_detected=0
-  prompt_execution_errors=0
+  prompt_governance_failed=0
 
   # Evita que un reporte de una ejecución previa haga parecer exitoso a un
   # scanner que falló antes de generar su salida actual.
-  rm -f "${promptsonar_json}" "${auditor_json}" \
-    "${REPORTS_DIR}/${safe_name}-promptsonar.sarif" \
-    "${REPORTS_DIR}/${safe_name}-pi-auditor.sarif" \
-    "${unified_sarif}"
+  rm -f "${promptsonar_json}" "${auditor_json}" "${promptsonar_sarif}" \
+    "${unified_sarif}" "${summary_json}"
 
   echo "========================================"
-  echo "PROMPT: ${prompt_file}"
+  echo "PROMPT: ${prompt_file_display}"
   echo "========================================"
 
   echo "[ANÁLISIS A: PROMPTSONAR]"
   echo "  Cobertura: injection, jailbreak, obfuscación, secretos/PII y agency."
-  echo "  Umbral aplicado: ${PROMPTSONAR_FAIL_ON}"
-  echo "  [1/4] Generando JSON de PromptSonar"
+  echo "  Umbral de publicación y gate: ${FAIL_ON}"
+  echo "  [1/3] Generando JSON de PromptSonar"
   run_promptsonar scan \
     "${prompt_file}" \
     --json \
     --output "${promptsonar_json}" \
     "${promptsonar_args[@]}" 2>&1 | sed 's/^/[PROMPTSONAR] /'
   promptsonar_json_status="${PIPESTATUS[0]}"
-  record_step_status "PromptSonar JSON" "${promptsonar_json_status}" "${promptsonar_json}" true
-  if [ -s "${promptsonar_json}" ]; then
-    print_promptsonar_findings "${promptsonar_json}"
-  fi
+  record_step_status "PromptSonar JSON" "${promptsonar_json_status}" "${promptsonar_json}" promptsonar
 
-  echo "  [2/4] Generando SARIF de PromptSonar"
+  echo "  [2/3] Generando SARIF original de PromptSonar"
   run_promptsonar scan \
     "${prompt_file}" \
     --sarif \
     --output "${promptsonar_sarif}" \
     "${promptsonar_args[@]}" 2>&1 | sed 's/^/[PROMPTSONAR] /'
   promptsonar_sarif_status="${PIPESTATUS[0]}"
-  record_step_status "PromptSonar SARIF" "${promptsonar_sarif_status}" "${promptsonar_sarif}" true
+  record_step_status "PromptSonar SARIF" "${promptsonar_sarif_status}" "${promptsonar_sarif}" promptsonar
 
   echo ""
   echo "[ANÁLISIS B: PROMPT-INJECTION-AUDITOR / pi_scan.py]"
   echo "  Cobertura: jerarquía de instrucciones, non-disclosure, authority spoofing,"
   echo "  delimitación de contenido no confiable, confirm gates y hardening."
-  echo "  [3/4] Generando JSON de prompt-injection-auditor"
+  echo "  [3/3] Generando JSON de prompt-injection-auditor"
   python3 "${AUDITOR}" \
     "${prompt_file}" \
     --json "${auditor_json}" 2>&1 | sed 's/^/[PI-AUDITOR] /'
   auditor_json_status="${PIPESTATUS[0]}"
-  record_step_status "prompt-injection-auditor JSON" "${auditor_json_status}" "${auditor_json}" true
+  record_step_status "prompt-injection-auditor JSON" "${auditor_json_status}" "${auditor_json}" auditor
 
-  echo ""
-  echo "[CONVERSIÓN DE RESULTADOS B: JSON pi-auditor → SARIF 2.1.0]"
-  echo "  Nota: este paso no vuelve a analizar el prompt; adapta el resultado"
-  echo "  de prompt-injection-auditor para su importación en SonarQube."
-  echo "  [4/4] Generando SARIF de prompt-injection-auditor"
-  if [ -f "${auditor_json}" ]; then
-    python3 "${PI_AUDITOR_TO_SARIF}" "${auditor_json}" --output "${auditor_sarif}" 2>&1 | sed 's/^/[PI-AUDITOR→SARIF] /'
-    auditor_sarif_status="${PIPESTATUS[0]}"
-    record_step_status "prompt-injection-auditor SARIF conversion" "${auditor_sarif_status}" "${auditor_sarif}" false
-  else
-    execution_errors=1
-    prompt_execution_errors=1
-    echo "ERROR: prompt-injection-auditor did not produce ${auditor_json}" >&2
-  fi
-
-  echo ""
-  echo "Reportes del análisis A — PromptSonar:"
-  echo "  JSON : ${promptsonar_json}"
-  echo "  SARIF: ${promptsonar_sarif}"
-  echo "Reportes del análisis B — prompt-injection-auditor:"
-  echo "  JSON : ${auditor_json}"
-  echo "  SARIF: ${auditor_sarif}"
-
-  if [ "${prompt_execution_errors}" -ne 0 ]; then
-    prompt_result="ERROR"
-  elif [ "${prompt_findings_detected}" -ne 0 ]; then
-    prompt_result="BLOCK"
-  else
-    prompt_result="PASS"
-  fi
-  summary_args+=(--report-pair "${prompt_file}" "${promptsonar_json}" "${auditor_json}" "${prompt_result}")
-  if [ -s "${promptsonar_sarif}" ] && [ -s "${auditor_sarif}" ]; then
-    sarif_args+=(--input "${promptsonar_sarif}" --input "${auditor_sarif}")
+  report_args+=(--report-set "${prompt_file_display}" "${promptsonar_json}" "${promptsonar_sarif}" "${auditor_json}")
+  if [ "${prompt_governance_failed}" -ne 0 ]; then
+    governance_args+=(--governance-failed "${prompt_file_display}")
   fi
   echo ""
 done
 
 echo "========================================"
-echo " CONSOLIDATING SARIF REPORTS"
+echo " CONVERTING, FILTERING AND CONSOLIDATING SARIF"
 echo "========================================"
 
-if [ "${execution_errors}" -eq 0 ]; then
-  python3 "${SARIF_MERGER}" --output "${unified_sarif}" "${sarif_args[@]}"
-  if [ "$?" -ne 0 ]; then
-    echo "ERROR: unified SARIF could not be generated." >&2
-    execution_errors=1
-  fi
-else
-  echo "Skipping unified SARIF because one or more scanners had execution errors." >&2
-fi
-
-echo "========================================"
-echo " SCAN COMPLETE"
-echo "========================================"
-
+consolidator_args=(
+  --target "${TARGET_DISPLAY}"
+  --output-sarif "${unified_sarif}"
+  --output-summary "${summary_json}"
+  --fail-on "${FAIL_ON}"
+  --promptsonar-categories "${PROMPTSONAR_SONAR_CATEGORIES}"
+  --exit-on-findings "${EXIT_ON_FINDINGS}"
+  --pi-auditor-revision "$(git -C /opt/prompt-injection-auditor rev-parse --short HEAD 2>/dev/null || echo unknown)"
+)
 if [ "${execution_errors}" -ne 0 ]; then
-  overall_result="ERROR"
-  expected_exit_code=2
-elif [ "${findings_detected}" -ne 0 ]; then
-  overall_result="BLOCK"
-  if [ "${EXIT_ON_FINDINGS}" = "true" ]; then
-    expected_exit_code=1
-  else
-    expected_exit_code=0
-  fi
-else
-  overall_result="PASS"
-  expected_exit_code=0
+  consolidator_args+=(--scanner-error)
 fi
-
-pi_auditor_revision="$(git -C /opt/prompt-injection-auditor rev-parse --short HEAD 2>/dev/null || echo unknown)"
-python3 "${SCAN_SUMMARY}" \
-  --output "${REPORTS_DIR}/prompt-security-scan-summary.json" \
-  --target "${TARGET}" \
-  --promptsonar-fail-on "${PROMPTSONAR_FAIL_ON}" \
-  --exit-on-findings "${EXIT_ON_FINDINGS}" \
-  --pi-auditor-revision "${pi_auditor_revision}" \
-  --overall-result "${overall_result}" \
-  --expected-exit-code "${expected_exit_code}" \
-  "${summary_args[@]}"
-if [ "$?" -ne 0 ]; then
-  echo "ERROR: execution summary could not be generated." >&2
-  execution_errors=1
-fi
-
-if [ "${execution_errors}" -ne 0 ]; then
-  echo "Scan completed with one or more execution errors." >&2
-  exit 2
-fi
-
-if [ "${findings_detected}" -ne 0 ]; then
-  echo "Scan completed with blocking security findings."
-
-  if [ "${EXIT_ON_FINDINGS}" = "true" ]; then
-    echo "Returning exit code 1 because blocking findings were detected."
-    exit 1
-  fi
-
-  echo "Returning exit code 0 because EXIT_ON_FINDINGS=false."
-  exit 0
-fi
-
-echo "Scan completed successfully. No blocking findings were detected."
-exit 0
+python3 "${CONSOLIDATOR}" "${consolidator_args[@]}" "${governance_args[@]}" "${report_args[@]}"
+exit $?

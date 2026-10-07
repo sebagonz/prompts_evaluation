@@ -1,0 +1,5 @@
+variables:
+    BRANCH: main
+include:
+  - project: 'devsecops/devsecops-templates'
+    file: '/util/registry-image-upload.yml'
