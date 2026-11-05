@@ -1,0 +1,4 @@
+# Compatibilidad con el nombre anterior: toda la definición vive en Compose principal.
+# docker compose -f docker-compose-ansemantic-litellm.yml up --build
+include:
+  - docker-compose.yml

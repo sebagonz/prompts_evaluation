@@ -1,18 +1,108 @@
+x-scanner: &scanner
+  image: prompt-security-poc:local
+  build:
+    context: .
+  user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+  volumes:
+    - ./prompts:/workspace/prompts:ro
+    - ./reports:/workspace/reports
+  environment: &scan-environment
+    REPORTS_DIR: /workspace/reports
+    FAIL_ON: ${FAIL_ON:-critical}
+    PROMPTSONAR_SONAR_CATEGORIES: ${PROMPTSONAR_SONAR_CATEGORIES:-security}
+    EXIT_ON_FINDINGS: ${EXIT_ON_FINDINGS:-true}
+
 services:
+  # Compatibilidad con docker compose run --rm prompt-security [ruta].
+  # Solo scanners estáticos y consolidación, sin dependencias de infraestructura.
   prompt-security:
-    build:
-      context: .
-    image: prompt-security-poc:local
-    volumes:
-      - ./prompts:/workspace/prompts:ro
-      - ./reports:/workspace/reports
-    # En Linux/SUSE, definir LOCAL_UID y LOCAL_GID con el usuario que ejecuta
-    # Docker para evitar reportes propiedad de root. 1000 funciona como valor
-    # por defecto en la mayoría de instalaciones de laboratorio.
-    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    <<: *scanner
+    profiles: [static]
+    command: [prompts]
+
+  prompt-static:
+    <<: *scanner
     environment:
-      REPORTS_DIR: /workspace/reports
-      FAIL_ON: ${FAIL_ON:-critical}
-      PROMPTSONAR_SONAR_CATEGORIES: ${PROMPTSONAR_SONAR_CATEGORIES:-security}
-      EXIT_ON_FINDINGS: ${EXIT_ON_FINDINGS:-true}
-    command: ["prompts"]
+      <<: *scan-environment
+      DEFER_CONSOLIDATION: "1"
+    command: [prompts]
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+      POSTGRES_DB: litellm
+    volumes:
+      - litellm-db:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U litellm -d litellm]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.106.3@sha256:74d0696a9f0afcc993c7659d246f0c542f003368298633e852228250779f1032
+    entrypoint: [/bin/sh, /app/start-proxy.sh]
+    command: [--config, /app/config.yaml, --host, 0.0.0.0, --port, "4000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/litellm
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local-development-only}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:-sk-local-salt-development-only}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-openai/gpt-6.1-sol}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-anthropic/claude-sonnet-4-6}
+      UI_USERNAME: ${UI_USERNAME:-local-admin}
+      UI_PASSWORD: ${UI_PASSWORD:-local-development-only}
+      LITELLM_LOCAL_MODEL_COST_MAP: "true"
+      DO_NOT_TRACK: "1"
+    ports:
+      - "127.0.0.1:${LITELLM_PORT:-4001}:4000"
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+      - ./litellm/start-proxy.sh:/app/start-proxy.sh:ro
+      - ./certs:/app/certs:ro
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 30
+      start_period: 40s
+
+  prompt-analyzer:
+    <<: *scanner
+    entrypoint: [semantic-scan]
+    command: [--defer-exit, prompts]
+    depends_on:
+      litellm:
+        condition: service_healthy
+    environment:
+      <<: *scan-environment
+      PROMPTS_DIR: /workspace/prompts
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000/v1}
+      LITELLM_API_KEY: ${LITELLM_AUDITOR_KEY:-}
+      MODEL_NAME: ${AUDIT_MODEL:-audit-anthropic}
+      REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS:-120}
+      MAX_OUTPUT_TOKENS: ${MAX_OUTPUT_TOKENS:-6000}
+      MAX_ATTEMPTS: ${MAX_ATTEMPTS:-2}
+      MAX_PARALLEL_PROMPTS: ${MAX_PARALLEL_PROMPTS:-4}
+      USE_JSON_SCHEMA: ${USE_JSON_SCHEMA:-1}
+      MAX_INPUT_CHARS: ${MAX_INPUT_CHARS:-30000}
+      FORCE_COLOR: ${FORCE_COLOR:-0}
+
+  consolidate:
+    <<: *scanner
+    entrypoint: [python3, /usr/local/bin/consolidate-scan-reports]
+    command: [--static-manifest, reports/static-scan-manifest.json, --semantic-summary, reports/prompt_audit/summary.json, --semantic-root, prompts]
+    depends_on:
+      prompt-static:
+        condition: service_completed_successfully
+      prompt-analyzer:
+        condition: service_completed_successfully
+
+volumes:
+  litellm-db:

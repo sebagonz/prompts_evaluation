@@ -1,41 +1,78 @@
 stages:
   - prompt_security
+  - consolidate
   - sonar_publish
 
 variables:
   REGISTRY: "registry.intranet.local:5000"
   PROMPTS_DIR: "prompts"
-
   CI_REPO_IMAGE_NAME: "plataformas/prompt-scanner"
-  CI_REPO_IMAGE_TAG: "1.0.1" # Nueva imagen que publicarás en Harbor
+  CI_REPO_IMAGE_TAG: "1.1.0"
   DC_IMAGE_BUILD: "pipeline-tools/python:ubuntu-20.04-python3"
-  
-
-  # Debe ser una imagen interna con sonar-scanner instalado.
-  # Reemplazar tag/nombre por el homologado por el banco.
   SONAR_SCANNER_IMAGE: "registry.intranet.local:5000/plataformas/sonar-scanner-cli:latest"
-
-  # Variables SONAR_SERVER y SONAR_TOKEN: definirlas en GitLab como
-  # variables protegidas y enmascaradas, no en este archivo.
   SONAR_QUALITY_GATE_WAIT: "true"
   SONAR_QUALITY_GATE_TIMEOUT: "600"
-
-  # En esta etapa mantiene evidencia y permite que Sonar procese hallazgos.
   EXIT_ON_FINDINGS: "false"
+  # Habilitar explícitamente con URL, clave virtual y alias en variables CI.
+  RUN_SEMANTIC_SCAN: "false"
 
-prompt_security_scan:
-  stage: prompt_security
-
+.scanner:
   image:
     name: "${REGISTRY}/${CI_REPO_IMAGE_NAME}:${CI_REPO_IMAGE_TAG}"
     entrypoint: [""]
-
-  script:
+  before_script:
     - cd "$CI_PROJECT_DIR"
     - mkdir -p reports
     - export REPORTS_DIR="$CI_PROJECT_DIR/reports"
-    - scan-prompts "$PROMPTS_DIR"
 
+prompt_static_scan:
+  extends: .scanner
+  stage: prompt_security
+  script:
+    - DEFER_CONSOLIDATION=1 scan-prompts "$PROMPTS_DIR"
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - reports/static-scan-manifest.json
+      - reports/static-sarif/
+      - reports/*-promptsonar.json
+      - reports/*-pi-auditor.json
+
+prompt_semantic_scan:
+  extends: .scanner
+  stage: prompt_security
+  rules:
+    - if: '$RUN_SEMANTIC_SCAN == "true"'
+  script:
+    - semantic-scan --defer-exit "$PROMPTS_DIR"
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - reports/prompt_audit/
+
+prompt_security_scan:
+  extends: .scanner
+  stage: consolidate
+  needs:
+    - job: prompt_static_scan
+      artifacts: true
+    - job: prompt_semantic_scan
+      artifacts: true
+      optional: true
+  when: always
+  script:
+    - |
+      if [ "$RUN_SEMANTIC_SCAN" = "true" ]; then
+        python3 /usr/local/bin/consolidate-scan-reports \
+          --static-manifest reports/static-scan-manifest.json \
+          --semantic-summary reports/prompt_audit/summary.json \
+          --semantic-root "$PROMPTS_DIR"
+      else
+        python3 /usr/local/bin/consolidate-scan-reports \
+          --static-manifest reports/static-scan-manifest.json
+      fi
   artifacts:
     when: always
     expire_in: 14 days

@@ -1,0 +1,4 @@
+# Compatibilidad: el único Dockerfile mantenido instala los tres scanners.
+# docker build --target prompt-scanner -t prompt-security-poc:local .
+FROM prompt-security-poc:local
+ENTRYPOINT ["semantic-scan"]

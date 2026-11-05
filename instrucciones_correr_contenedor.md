@@ -27,7 +27,7 @@ LOCAL_UID="$(id -u)" LOCAL_GID="$(id -g)" \
 Los resultados quedan en `reports/`. Un retorno no cero puede indicar findings
 del análisis; revisar JSON/SARIF y no sólo el código de salida.
 
-El contenedor consolida los resultados de PromptSonar y pi-auditor en un único
+El modo independiente consolida los resultados de PromptSonar y pi-auditor en un único
 SARIF, listo para importarse como external issue en SonarQube:
 
 ```bash
@@ -38,3 +38,13 @@ Para este POC la validación TLS de npm y Git está desactivada durante el build
 para tolerar la inspección SSL de la red corporativa. Antes de incorporar el
 flujo a desarrollo se debe habilitar nuevamente e instalar el certificado raíz
 corporativo.
+
+## Flujo completo con el semántico
+
+Exportar la clave del proveedor y ejecutar `./scripts/start-local.sh`. Con el
+setup listo, `docker compose up --build` levanta el proxy/DB, los scanners por
+separado y el consolidador con una única imagen para las tres fuentes.
+**El worker semántico llama al modelo y puede generar gastos.** El modo
+`docker compose run --rm prompt-security` de arriba sigue funcionando sin API.
+Consultar [README.md](README.md) para ejecutar pruebas con `--network none`,
+configurar el proxy externo y revisar códigos de salida.

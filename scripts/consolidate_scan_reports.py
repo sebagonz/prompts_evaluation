@@ -35,8 +35,11 @@ Cómo configurar el umbral de publicación y bloqueo:
 
 Parámetros de este script (python3 scripts/consolidate_scan_reports.py):
   --target RUTA                   Etiqueta del archivo/directorio; obligatorio.
+  --static-manifest RUTA          Artefactos del worker estático separado.
+  --semantic-summary RUTA --semantic-root RUTA
+                                  Resumen semántico explícito y sus fuentes.
   --report-set PROMPT PS_JSON PS_SARIF PI_JSON
-                                  Cuatro entradas por prompt; repetir; obligatorio.
+                                  Cuatro entradas por prompt; repetir.
   --output-sarif RUTA             SARIF consolidado; obligatorio.
   --output-summary RUTA           Resumen JSON; obligatorio.
   --fail-on NIVEL                 Publicación y gate: critical por defecto;
@@ -60,6 +63,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import os
 import sys
@@ -78,7 +82,8 @@ PROMPTSONAR_CATEGORIES = frozenset((
     "consistency", "efficiency", "ethics",
 ))
 PROMPTSONAR_RANK = {"info": 20, "low": 20, "medium": 50, "high": 70, "critical": 90}
-TOOL_NAMES = {"promptsonar": "PromptSonar", "pi-auditor": "prompt-injection-auditor"}
+TOOL_NAMES = {"promptsonar": "PromptSonar", "pi-auditor": "prompt-injection-auditor",
+              "semantic": "semantic-prompt-auditor"}
 SARIF_LEVELS = {"critical": "error", "high": "error", "medium": "warning",
                 "low": "note", "info": "note"}
 
@@ -121,7 +126,9 @@ def report_summary(path: Path, tool: str, report: dict[str, Any] | None = None) 
                 counts[severity if severity in counts else "unknown"] += 1
     summary: dict[str, Any] = {"report": str(path), "available": True,
                                "findings": counts, "total_findings": sum(counts.values())}
-    if tool == "promptsonar":
+    if tool == "semantic":
+        summary.update(tool=TOOL_NAMES["semantic"])
+    elif tool == "promptsonar":
         waived = sum(finding.get("waived") is True for finding in findings
                      if isinstance(finding, dict)) if isinstance(findings, list) else 0
         summary.update(version=report.get("version", "unknown"),
@@ -201,6 +208,105 @@ def convert_pi_report(report: dict[str, Any]) -> dict[str, Any]:
     return {"$schema": SARIF_SCHEMA, "version": SARIF_VERSION, "runs": [run]}
 
 
+def convert_semantic_report(record: dict[str, Any], uri: str,
+                            metadata: dict[str, Any]) -> dict[str, Any]:
+    """Exporta propuestas completas, conservando evidencia y trazabilidad."""
+    rules = {}
+    results = []
+    for finding in record["findings"]:
+        rule_id, severity, title = finding_fields(finding, "semantic")
+        line = finding.get("line_number")
+        end = finding.get("end_line_number", line)
+        if type(line) is not int or line < 1 or type(end) is not int or end < line:
+            raise ValueError(f"{uri}: invalid semantic line range")
+        for field in ("explanation", "recommendation", "impact_conditions", "evidence"):
+            if not isinstance(finding.get(field), str) or not finding[field].strip():
+                raise ValueError(f"{uri}: missing semantic {field}")
+        rules.setdefault(rule_id, {
+            "id": rule_id, "shortDescription": {"text": rule_id},
+            "defaultConfiguration": {"level": SARIF_LEVELS[severity]},
+        })
+        message = (f"{title}\n\n{finding['explanation']}\n\n"
+                   f"Recomendación: {finding['recommendation']}\n\n"
+                   f"Condiciones de impacto: {finding['impact_conditions']}\n\n"
+                   "Propuesta semántica: requiere revisión humana.")
+        results.append({
+            "ruleId": rule_id, "level": SARIF_LEVELS[severity],
+            "message": {"text": message},
+            "locations": [{"physicalLocation": {
+                "artifactLocation": {"uri": uri},
+                "region": {"startLine": line, "endLine": end,
+                           "snippet": {"text": finding["evidence"]}},
+            }}],
+            "properties": {**metadata, "severity": severity, "reviewRequired": True,
+                           "sha256": record.get("sha256"),
+                           **{key: finding[key] for key in
+                              ("citation_adjustment", "model_line_number") if key in finding}},
+        })
+    return {"version": SARIF_VERSION, "runs": [{
+        "tool": {"driver": {"name": TOOL_NAMES["semantic"], "rules": list(rules.values())}},
+        "properties": metadata, "results": results,
+    }]}
+
+
+def semantic_inputs(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+    """Valida la corrida actual y su cobertura; nunca consume un resumen viejo."""
+    if not args.semantic_summary:
+        return {}, {"status": "NOT_RUN"}, []
+    errors = []
+    if args.semantic_root is None:
+        raise ValueError("--semantic-root is required with --semantic-summary")
+    root = args.semantic_root.resolve()
+    if not root.exists():
+        raise ValueError(f"semantic: target does not exist: {root}")
+    report = read_json(args.semantic_summary)
+    status = report.get("status")
+    if status not in ("COMPLETE", "NOT_APPLICABLE"):
+        errors.append(report.get("error") or f"semantic: audit is not complete (status={status})")
+    records = report.get("results")
+    if not isinstance(records, list):
+        raise ValueError("semantic: expected results array")
+    expected = ({root.name: root} if root.is_file() and root.suffix.lower() == ".txt" else
+                {path.relative_to(root).as_posix(): path for path in root.rglob("*")
+                 if path.is_file() and not path.is_symlink() and path.suffix.lower() == ".txt"
+                 and not any(part.startswith(".") for part in path.relative_to(root).parts)
+                 and not any(parent.is_symlink() for parent in path.parents if parent != root)})
+    if status == "NOT_APPLICABLE" and (records or expected):
+        errors.append("semantic: NOT_APPLICABLE contradicts TXT coverage")
+    mapped = {}
+    seen = set()
+    for record in records:
+        name = record["file"]
+        if name not in expected or name in seen:
+            raise ValueError(f"semantic: unexpected or duplicate file {name}")
+        seen.add(name)
+        source = expected[name]
+        if record.get("sha256") != hashlib.sha256(source.read_bytes()).hexdigest():
+            raise ValueError(f"semantic: source changed since audit: {name}")
+        status = record.get("status")
+        if status not in ("REVIEW", "NO_FINDINGS", "ERROR"):
+            raise ValueError(f"semantic: invalid status for {name}")
+        findings = record.get("findings")
+        if not isinstance(findings, list) or ((status == "REVIEW") != bool(findings)):
+            raise ValueError(f"semantic: inconsistent findings/status for {name}")
+        if status == "ERROR":
+            errors.append(f"{name}: {record.get('error', 'auditoría incompleta')}")
+        try:
+            uri = source.relative_to(Path.cwd().resolve()).as_posix()
+        except ValueError:
+            uri = source.as_uri()
+        mapped[uri] = record
+    reported = {record["file"] for record in records}
+    if reported != set(expected):
+        errors.append(f"semantic: incomplete coverage; missing {sorted(set(expected) - reported)}")
+    metadata = {key: report.get(key) for key in
+                ("run_id", "model", "rubric_sha256", "started_at", "finished_at", "duration_ms")}
+    metadata["counts"] = dict(Counter(record["status"] for record in records))
+    metadata.update(status="ERROR" if errors else ("COMPLETE" if records else "NOT_APPLICABLE"),
+                    report=str(args.semantic_summary), errors=errors)
+    return mapped, metadata, errors
+
+
 def merge_runs(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Agrupa los runs por herramienta y conserva los resultados y reglas únicos."""
     merged: dict[tuple[str, str, str], dict[str, Any]] = {}
@@ -222,7 +328,7 @@ def merge_runs(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def finding_fields(finding: dict[str, Any], tool: str) -> tuple[str, str, str]:
-    rule_id = finding.get("rule_id" if tool == "promptsonar" else "id")
+    rule_id = finding.get("rule_id" if tool in ("promptsonar", "semantic") else "id")
     severity = finding.get("severity")
     title = finding.get("message" if tool == "promptsonar" else "title")
     if not isinstance(rule_id, str) or not rule_id:
@@ -245,6 +351,8 @@ def matches(result: dict[str, Any], finding: dict[str, Any], tool: str) -> bool:
         return False
     if tool == "promptsonar":
         return result.get("rank") == PROMPTSONAR_RANK[severity]
+    if tool == "semantic":
+        return result.get("properties", {}).get("severity") == severity
     result_severity = result.get("properties", {}).get("piAuditorSeverity")
     return ("info" if result_severity == "informational" else result_severity) == severity
 
@@ -334,11 +442,13 @@ def build_summary(args: argparse.Namespace, prompts: list[dict[str, Any]],
                   error: str | None = None) -> dict[str, Any]:
     promptsonar_total = Counter(dict.fromkeys(SEVERITIES, 0))
     auditor_total = Counter(dict.fromkeys(SEVERITIES, 0))
+    semantic_total = Counter(dict.fromkeys(SEVERITIES, 0))
     for prompt in prompts:
         promptsonar_total.update(prompt["promptsonar"]["findings"])
         auditor_total.update(prompt["pi_auditor"]["findings"])
+        semantic_total.update(prompt.get("semantic", {}).get("findings", {}))
     summary: dict[str, Any] = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "target": args.target,
         "policy": {
@@ -348,7 +458,9 @@ def build_summary(args: argparse.Namespace, prompts: list[dict[str, Any]],
         },
         "tools": {"pi_auditor_revision": args.pi_auditor_revision},
         "prompts": prompts,
-        "totals": {"promptsonar": dict(promptsonar_total), "pi_auditor": dict(auditor_total)},
+        "totals": {"promptsonar": dict(promptsonar_total), "pi_auditor": dict(auditor_total),
+                   "semantic": dict(semantic_total)},
+        "semantic": getattr(args, "semantic_metadata", {"status": "NOT_RUN"}),
         "overall_result": overall_result,
         "expected_exit_code": expected_exit_code,
     }
@@ -377,6 +489,10 @@ def print_summary(summary: dict[str, Any], output: Path, sarif_path: Path,
         print(f"  PROMPTSONAR : {format_counts(ps['findings'])} "
               f"(waived={ps.get('waived_findings', 0)})")
         print(f"  PI-AUDITOR  : {format_counts(prompt['pi_auditor']['findings'])}")
+        semantic = prompt.get("semantic", {"status": "NOT_RUN", "findings": {}})
+        print(f"  SEMANTIC    : {semantic['status']} {format_counts(semantic['findings'])}")
+        if semantic.get("error"):
+            print(f"    ERROR: {semantic['error']}")
         if summary["overall_result"] == "ERROR":
             print("  SONAR       : no se genera SARIF final por un error técnico")
         else:
@@ -396,6 +512,9 @@ def print_summary(summary: dict[str, Any], output: Path, sarif_path: Path,
         print("----------------------------------------")
     print(f"TOTAL PROMPTSONAR: {format_counts(summary['totals']['promptsonar'])}")
     print(f"TOTAL PI-AUDITOR : {format_counts(summary['totals']['pi_auditor'])}")
+    print(f"TOTAL SEMANTIC   : {format_counts(summary['totals']['semantic'])}")
+    for error in summary["semantic"].get("errors", []):
+        print(f"  SEMANTIC ERROR: {error}")
     if summary["overall_result"] != "ERROR":
         print(f"TOTAL A SONAR     : {len(published)}")
         print(f"TOTAL EXCLUIDOS   : {len(excluded)}")
@@ -404,12 +523,17 @@ def print_summary(summary: dict[str, Any], output: Path, sarif_path: Path,
     print(f"SUMMARY JSON     : {output}")
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--target", required=True)
-    parser.add_argument("--output-sarif", required=True, type=Path)
-    parser.add_argument("--output-summary", required=True, type=Path)
+    parser.add_argument("--target", default="prompts")
+    parser.add_argument("--static-manifest", type=Path)
+    parser.add_argument("--semantic-summary", type=Path)
+    parser.add_argument("--semantic-root", type=Path)
+    parser.add_argument("--output-sarif", type=Path,
+                        default=Path(os.getenv("REPORTS_DIR", "reports")) / "prompt-security-scan.sarif")
+    parser.add_argument("--output-summary", type=Path,
+                        default=Path(os.getenv("REPORTS_DIR", "reports")) / "prompt-security-scan-summary.json")
     parser.add_argument("--fail-on", default="critical",
                         choices=("critical", "high", "medium", "low", "none"))
     parser.add_argument("--promptsonar-categories", default="security")
@@ -419,7 +543,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scanner-error", action="store_true")
     parser.add_argument("--report-set", action="append", nargs=4, default=[],
                         metavar=("PROMPT", "PROMPTSONAR_JSON", "PROMPTSONAR_SARIF", "PI_AUDITOR_JSON"))
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     args.categories = {item.strip().lower() for item in args.promptsonar_categories.split(",")
                        if item.strip()}
     if not args.categories:
@@ -428,8 +552,7 @@ def parse_args() -> argparse.Namespace:
     if unknown:
         parser.error(f"unknown PromptSonar categories: {', '.join(sorted(unknown))}; "
                      f"valid values: {', '.join(sorted(PROMPTSONAR_CATEGORIES))}")
-    if not args.report_set:
-        parser.error("at least one --report-set is required")
+
     return args
 
 
@@ -442,12 +565,15 @@ def main() -> int:
     source_reports: list[str] = []
     current_prompt = ""
     try:
-        if args.scanner_error:
-            for prompt, ps_json_text, _, auditor_json_text in args.report_set:
-                prompts.append({"path": prompt, "result": "ERROR",
-                                "promptsonar": report_summary(Path(ps_json_text), "promptsonar"),
-                                "pi_auditor": report_summary(Path(auditor_json_text), "pi_auditor")})
-            raise ValueError("one or more scanners had execution errors")
+        if args.static_manifest:
+            manifest = read_json(args.static_manifest)
+            args = parse_args(manifest["arguments"] + sys.argv[1:])
+            for source, expected_hash in manifest.get("source_hashes", {}).items():
+                if hashlib.sha256(Path(source).read_bytes()).hexdigest() != expected_hash:
+                    raise ValueError(f"static: source changed since scan: {source}")
+        if not (args.static_manifest or args.report_set or args.semantic_summary):
+            raise ValueError("at least one static or semantic report source is required")
+        semantic_records, args.semantic_metadata, semantic_errors = semantic_inputs(args)
         for prompt, ps_json_text, ps_sarif_text, auditor_json_text in args.report_set:
             current_prompt = prompt
             ps_json_path = Path(ps_json_text)
@@ -463,7 +589,12 @@ def main() -> int:
             ps_sarif = read_json(ps_sarif_path)
             if ps_sarif.get("version") != SARIF_VERSION:
                 raise ValueError(f"{ps_sarif_path}: expected SARIF {SARIF_VERSION}")
+            auditor_report["target"] = prompt
             pi_sarif = convert_pi_report(auditor_report)
+            for run in ps_sarif.get("runs", []):
+                for result in run.get("results", []):
+                    for location in result.get("locations", []):
+                        location["physicalLocation"]["artifactLocation"]["uri"] = prompt
             ps_sarif, ps_decisions, ps_gate = process_tool(
                 ps_report, ps_sarif, "promptsonar", args.categories,
                 args.fail_on)
@@ -489,9 +620,32 @@ def main() -> int:
             documents.extend((ps_sarif, pi_sarif))
             source_reports.extend((ps_sarif_text, auditor_json_text))
 
+        for uri, record in semantic_records.items():
+            entry = next((item for item in prompts if item["path"] == uri), None)
+            if entry is None:
+                entry = {"path": uri, "result": "PASS",
+                         "promptsonar": {"findings": {}}, "pi_auditor": {"findings": {}}}
+                prompts.append(entry)
+            entry["semantic"] = {**report_summary(args.semantic_summary, "semantic", record),
+                                 "status": record["status"], "sha256": record.get("sha256")}
+            if record["status"] == "ERROR":
+                entry["semantic"]["error"] = record.get("error", "auditoría incompleta")
+                entry["semantic"]["partial_findings_count"] = len(record.get("partial_findings", []))
+                entry["result"] = "ERROR"
+            sarif = convert_semantic_report(record, uri, args.semantic_metadata)
+            sarif, decisions, gate = process_tool(record, sarif, "semantic", set(), args.fail_on)
+            print_decisions(uri, "SEMANTIC", decisions)
+            for decision in decisions:
+                item = {"prompt": uri, "tool": TOOL_NAMES["semantic"], **decision}
+                (published if decision["included"] else excluded).append(item)
+            if gate and entry["result"] != "ERROR":
+                entry["result"] = "BLOCK"
+            documents.append(sarif)
+        if args.semantic_summary:
+            source_reports.append(str(args.semantic_summary))
+        if args.scanner_error or semantic_errors:
+            raise ValueError("; ".join(semantic_errors) or "one or more scanners had execution errors")
         runs = merge_runs(documents)
-        if not runs:
-            raise ValueError("no SARIF runs were produced")
         if len(published) != sum(len(run["results"]) for run in runs):
             raise ValueError("published findings do not match consolidated SARIF results")
         unified = {"$schema": SARIF_SCHEMA, "version": SARIF_VERSION, "runs": runs,
@@ -504,6 +658,8 @@ def main() -> int:
         exit_code = 1 if blocked and args.exit_on_findings == "true" else 0
         summary = build_summary(args, prompts, overall, exit_code)
     except (OSError, ValueError, TypeError, KeyError) as error:
+        if (args.semantic_summary) and not hasattr(args, "semantic_metadata"):
+            args.semantic_metadata = {"status": "ERROR", "errors": [str(error)]}
         args.output_sarif.unlink(missing_ok=True)
         published.clear()
         excluded.clear()
