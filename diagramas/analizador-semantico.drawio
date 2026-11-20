@@ -1,0 +1,413 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" type="device" compressed="false">
+  <diagram id="overview" name="1. Flujo general: tres fuentes y una consolidación">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="overview-title" value="&lt;b&gt;1. Flujo general: tres fuentes y una consolidación&lt;/b&gt;&lt;br&gt;prompts-analizer · misma imagen para scanners/consolidación · revisión estática de TXT · 5 de noviembre de 2026" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=24;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="1720" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-start" value="&lt;b&gt;./scripts/start-local.sh&lt;/b&gt;&lt;br&gt;Inicializa secretos y aprovisiona la clave virtual&lt;br&gt;Luego: docker compose up --build" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="630" y="130" width="540" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-static-lane" value="&lt;b&gt;prompt-static-1&lt;/b&gt;&lt;br&gt;Scanners de patrones · sin LLM" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f2f4f7;strokeColor=#8994a5;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;verticalAlign=top;spacingTop=12;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="240" width="420" height="510" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-semantic-lane" value="&lt;b&gt;prompt-analyzer-1&lt;/b&gt;&lt;br&gt;Harness directo · semantic-scan --defer-exit prompts" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f2f4f7;strokeColor=#8994a5;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;verticalAlign=top;spacingTop=12;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="500" y="240" width="800" height="510" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-infra-lane" value="&lt;b&gt;Infraestructura&lt;/b&gt;&lt;br&gt;Imágenes independientes del scanner" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f2f4f7;strokeColor=#8994a5;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;verticalAlign=top;spacingTop=12;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="240" width="420" height="510" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-static" value="&lt;b&gt;scan-prompts.sh&lt;/b&gt;&lt;br&gt;DEFER_CONSOLIDATION=1" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="75" y="320" width="350" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-ps" value="&lt;b&gt;PromptSonar&lt;/b&gt;&lt;br&gt;JSON + SARIF" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="75" y="430" width="165" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-pi" value="&lt;b&gt;pi-auditor&lt;/b&gt;&lt;br&gt;JSON" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="260" y="430" width="165" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-static-json" value="&lt;b&gt;Artefactos estáticos&lt;/b&gt;&lt;br&gt;static-scan-manifest.json&lt;br&gt;static-sarif/ + JSON originales&lt;br&gt;Rutas relativas al checkout" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="75" y="590" width="350" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-cli" value="&lt;b&gt;cli() → main()&lt;/b&gt;&lt;br&gt;CLI y ciclo de vida&lt;br&gt;Resumen inicial: RUNNING" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="535" y="320" width="330" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-orchestrator" value="&lt;b&gt;audit_prompts(report)&lt;/b&gt;&lt;br&gt;Selección + semáforo + tareas&lt;br&gt;Una tarea por TXT" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="925" y="320" width="330" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-agent" value="&lt;b&gt;run_prompt_agent(...)&lt;/b&gt;&lt;br&gt;Aislamiento de errores por TXT&lt;br&gt;Retorna (index, record)" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="535" y="460" width="330" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-audit" value="&lt;b&gt;audit_file(...)&lt;/b&gt;&lt;br&gt;Mensajes + llamada + validación&lt;br&gt;Reintento de JSON o citas" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#fff1dc;strokeColor=#cf963a;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="925" y="460" width="330" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-semantic-json" value="&lt;b&gt;prompt_audit/summary.json + runs/&amp;lt;run_id&amp;gt;/&lt;/b&gt;&lt;br&gt;Estado final y exit_code · JSON por TXT · tablas y errores en stdout&lt;br&gt;No hay wrapper ni recibo adicional" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="535" y="610" width="720" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-proxy" value="&lt;b&gt;LiteLLM&lt;/b&gt;&lt;br&gt;Interno: http://litellm:4000/v1&lt;br&gt;Host: 127.0.0.1:4001 (configurable)" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1375" y="335" width="350" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-db" value="&lt;b&gt;PostgreSQL&lt;/b&gt;&lt;br&gt;Usuarios y claves virtuales&lt;br&gt;La clave debe existir en esta DB" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f2f4f7;strokeColor=#8994a5;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1375" y="495" width="350" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-judge" value="&lt;b&gt;LLM juez / proveedor&lt;/b&gt;&lt;br&gt;Solo el análisis semántico consulta el modelo&lt;br&gt;Las llamadas pueden generar costo" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#fff1dc;strokeColor=#cf963a;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1375" y="625" width="350" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-consolidate-lane" value="&lt;b&gt;consolidate-1 · espera a los dos workers&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f2f4f7;strokeColor=#8994a5;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;verticalAlign=top;spacingTop=12;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="815" width="1720" height="245" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-inputs" value="&lt;b&gt;Leer y validar entradas&lt;/b&gt;&lt;br&gt;Manifiesto estático + resumen semántico&lt;br&gt;Estado final, cobertura y hashes" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="75" y="890" width="360" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-convert" value="&lt;b&gt;convert_semantic_report()&lt;/b&gt;&lt;br&gt;JSON → SARIF 2.1.0&lt;br&gt;Solo findings completos" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="480" y="890" width="345" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-policy" value="&lt;b&gt;process_tool() → merge_runs()&lt;/b&gt;&lt;br&gt;FAIL_ON común a las tres fuentes&lt;br&gt;Un run SARIF por herramienta" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="870" y="890" width="380" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-outputs" value="&lt;b&gt;Salidas unificadas&lt;/b&gt;&lt;br&gt;prompt-security-scan-summary.json&lt;br&gt;prompt-security-scan.sarif → Sonar&lt;br&gt;ERROR técnico: elimina el SARIF final" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1295" y="890" width="430" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-legend" value="&lt;b&gt;Lectura del diagrama&lt;/b&gt;&lt;br&gt;Flecha continua: control/datos · discontinua: llamada a infraestructura&lt;br&gt;COMPLETE admite propuestas para revisión humana; el quality gate de Sonar es independiente." style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#ffffff;strokeColor=#bdc8d6;fontColor=#172b4d;fontFamily=Helvetica;fontSize=15;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="250" y="1090" width="1300" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-edge-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;exitX=0;exitY=0.5;entryX=0.5;entryY=0;" edge="1" parent="1" source="overview-start" target="overview-static">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="250" y="215" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="overview-edge-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-start" target="overview-cli">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="700" y="220" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="overview-edge-3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-static" target="overview-ps">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-edge-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-static" target="overview-pi">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-edge-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-ps" target="overview-static-json">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-edge-6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-pi" target="overview-static-json">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-edge-7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-cli" target="overview-orchestrator">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-edge-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-orchestrator" target="overview-agent">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1090" y="440" />
+              <mxPoint x="700" y="440" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="overview-edge-9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-agent" target="overview-audit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-edge-10" value="acompletion()" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;exitX=1;exitY=0.4;entryX=0;entryY=0.5;dashed=1;dashPattern=5 4;" edge="1" parent="1" source="overview-audit" target="overview-proxy">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-edge-11" value="autenticación" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;dashed=1;dashPattern=5 4;" edge="1" parent="1" source="overview-proxy" target="overview-db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-edge-12" value="consulta" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;exitX=1;exitY=0.5;entryX=1;entryY=0.5;dashed=1;dashPattern=5 4;" edge="1" parent="1" source="overview-proxy" target="overview-judge">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1740" y="385" />
+              <mxPoint x="1740" y="660" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="overview-edge-13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-audit" target="overview-semantic-json">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-edge-14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-static-json" target="overview-inputs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-edge-15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-semantic-json" target="overview-inputs">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="895" y="780" />
+              <mxPoint x="255" y="780" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="overview-edge-16" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-inputs" target="overview-convert">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-edge-17" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-convert" target="overview-policy">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="overview-edge-18" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="overview-policy" target="overview-outputs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="functions" name="2. Estructura de funciones del harness">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="functions-title" value="&lt;b&gt;2. Estructura de funciones del harness&lt;/b&gt;&lt;br&gt;Firmas abreviadas y responsabilidades · las firmas completas y esqueletos están en CONTEXTO_ANALIZADOR_SEMANTICO.md" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=24;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="1720" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-flow-lane" value="&lt;b&gt;Flujo principal&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f2f4f7;strokeColor=#8994a5;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;verticalAlign=top;spacingTop=12;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="140" width="320" height="920" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-validation-lane" value="&lt;b&gt;Esquema y evidencia&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f2f4f7;strokeColor=#8994a5;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;verticalAlign=top;spacingTop=12;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="140" width="420" height="920" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-support-lane" value="&lt;b&gt;Configuración y reportes&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f2f4f7;strokeColor=#8994a5;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;verticalAlign=top;spacingTop=12;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="860" y="140" width="420" height="920" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-display-lane" value="&lt;b&gt;Presentación y helpers&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f2f4f7;strokeColor=#8994a5;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;verticalAlign=top;spacingTop=12;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="140" width="440" height="920" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-cli" value="&lt;b&gt;cli() → int&lt;/b&gt;&lt;br&gt;target; --defer-exit&lt;br&gt;Configura entorno y ejecuta main()" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="60" y="200" width="280" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-main" value="&lt;b&gt;async main() → None&lt;/b&gt;&lt;br&gt;RUNNING → estado final&lt;br&gt;Registra exit_code y fallas iniciales" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="60" y="370" width="280" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-orchestrator" value="&lt;b&gt;async audit_prompts(report)&lt;/b&gt;&lt;br&gt;Configura N = MAX_PARALLEL_PROMPTS&lt;br&gt;Crea tareas; reúne y ordena resultados&lt;br&gt;Escribe JSON y muestra progreso" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="60" y="545" width="280" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-agent" value="&lt;b&gt;async run_prompt_agent(...)&lt;/b&gt;&lt;br&gt;index, path, semaphore, configuración&lt;br&gt;Aísla errores; añade tiempos&lt;br&gt;Retorna (index, record)" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="60" y="735" width="280" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-audit" value="&lt;b&gt;async audit_file(...) → dict&lt;/b&gt;&lt;br&gt;path, rubric, model, URL, clave&lt;br&gt;Límites y use_json_schema&lt;br&gt;Única llamada al juez: acompletion()" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#fff1dc;strokeColor=#cf963a;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="60" y="915" width="280" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-provider" value="&lt;b&gt;provider_schema(schema)&lt;/b&gt;&lt;br&gt;Adapta esquema para el proveedor&lt;br&gt;Pydantic conserva las restricciones" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="425" y="200" width="370" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-models" value="&lt;b&gt;Modelos Pydantic&lt;/b&gt;&lt;br&gt;Finding + AuditJudgement&lt;br&gt;CitationRepair + reemplazos/retiros&lt;br&gt;Tipos estrictos; sin campos extra" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="425" y="350" width="370" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-evidence" value="&lt;b&gt;verify_finding_evidence(finding, lines)&lt;/b&gt;&lt;br&gt;Cita literal; corrección única de línea&lt;br&gt;O tramo único de dos líneas&lt;br&gt;Devuelve metadatos de ajuste" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="425" y="525" width="370" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-repair-msg" value="&lt;b&gt;citation_repair_message(...)&lt;/b&gt;&lt;br&gt;judgement, invalid, lines, schema&lt;br&gt;Pide corregir/retirar solo rechazados&lt;br&gt;Conserva hallazgos ya verificados" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="425" y="705" width="370" height="125" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-repair-coverage" value="&lt;b&gt;verify_repair_coverage(repair, indices)&lt;/b&gt;&lt;br&gt;Cada índice rechazado exactamente una vez&lt;br&gt;Sin índices nuevos, faltantes ni repetidos" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="425" y="875" width="370" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-env" value="&lt;b&gt;required_env(name) → str&lt;/b&gt;&lt;br&gt;Modelo, endpoint y clave virtual&lt;br&gt;Falla si la variable está vacía" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="885" y="200" width="370" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-select" value="&lt;b&gt;visible_txt_files(directory, allow_empty)&lt;/b&gt;&lt;br&gt;Carpeta o TXT; lista ordenada&lt;br&gt;allow_empty=True permite NOT_APPLICABLE" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="885" y="350" width="370" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-save" value="&lt;b&gt;save_json(path, record)&lt;/b&gt;&lt;br&gt;Temporal + reemplazo del destino&lt;br&gt;Resumen actual, archivado y por TXT" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="885" y="525" width="370" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-safe-error" value="&lt;b&gt;safe_error(error, secrets_to_hide)&lt;/b&gt;&lt;br&gt;Redacta claves conocidas&lt;br&gt;Acorta el diagnóstico" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#fde9e7;strokeColor=#b75c54;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="885" y="705" width="370" height="125" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-finding" value="&lt;b&gt;report_finding(finding)&lt;/b&gt;&lt;br&gt;Modelo → diccionario&lt;br&gt;Usa redact_sensitive_text(value)&lt;br&gt;Evidencia controlada antes de publicar" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="885" y="875" width="370" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-table" value="&lt;b&gt;render_findings_table(report, color, width, titles)&lt;/b&gt;&lt;br&gt;Hallazgos por severidad/archivo/línea&lt;br&gt;Parciales y errores en secciones separadas" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1345" y="200" width="390" height="125" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-titles" value="&lt;b&gt;parse_rule_titles(rubric)&lt;/b&gt;&lt;br&gt;ID SEM-* → título de la rúbrica&lt;br&gt;Sin duplicar nombres en código" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1345" y="370" width="390" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-elapsed" value="&lt;b&gt;format_elapsed(milliseconds)&lt;/b&gt;&lt;br&gt;HH:MM:SS.mmm" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1345" y="525" width="390" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-reason" value="&lt;b&gt;validation_reason(error)&lt;/b&gt;&lt;br&gt;Campo/tipo del error de esquema&lt;br&gt;No copia la respuesta cruda del LLM" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#fde9e7;strokeColor=#b75c54;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1345" y="675" width="390" height="125" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-verify-all" value="&lt;b&gt;verify_evidence(judgement, lines)&lt;/b&gt;&lt;br&gt;Valida todas las citas; helper de pruebas&lt;br&gt;Usa verify_finding_evidence()&lt;br&gt;No devuelve la colección de ajustes" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1345" y="850" width="390" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-legend" value="&lt;b&gt;Cómo leer el mapa&lt;/b&gt;&lt;br&gt;Columna izquierda: secuencia de control. Flechas discontinuas: dependencias destacadas, no exhaustivas.&lt;br&gt;Helpers internos de tabla: clean(), border(), row(). IncompleteAuditError conserva partial_findings." style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#ffffff;strokeColor=#bdc8d6;fontColor=#172b4d;fontFamily=Helvetica;fontSize=15;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="200" y="1090" width="1400" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-edge-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="functions-cli" target="functions-main">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-edge-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="functions-main" target="functions-orchestrator">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-edge-3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="functions-orchestrator" target="functions-agent">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-edge-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="functions-agent" target="functions-audit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-edge-5" value="selección" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;exitX=1;exitY=0.4;entryX=0.5;entryY=1;dashed=1;dashPattern=5 4;" edge="1" parent="1" source="functions-orchestrator" target="functions-select">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="375" y="610" />
+              <mxPoint x="375" y="500" />
+              <mxPoint x="1070" y="500" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="functions-edge-6" value="reparación" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;exitX=1;exitY=0.5;entryX=0;entryY=0.5;dashed=1;dashPattern=5 4;" edge="1" parent="1" source="functions-audit" target="functions-repair-coverage">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-edge-7" value="configuración" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;exitX=1;exitY=0.4;entryX=0.5;entryY=0;dashed=1;dashPattern=5 4;" edge="1" parent="1" source="functions-orchestrator" target="functions-env">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="380" y="600" />
+              <mxPoint x="380" y="175" />
+              <mxPoint x="1070" y="175" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="functions-edge-8" value="hallazgos tipados" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="functions-models" target="functions-evidence">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-edge-9" value="si hay citas rechazadas" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="functions-evidence" target="functions-repair-msg">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-edge-10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="functions-repair-msg" target="functions-repair-coverage">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="functions-edge-11" value="publicación" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;exitX=1;exitY=0.5;entryX=0.5;entryY=1;dashed=1;dashPattern=5 4;" edge="1" parent="1" source="functions-evidence" target="functions-finding">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="835" y="590" />
+              <mxPoint x="835" y="1050" />
+              <mxPoint x="1070" y="1050" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="functions-edge-12" value="resultados para stdout" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;dashed=1;dashPattern=5 4;" edge="1" parent="1" source="functions-save" target="functions-table">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="contracts" name="3. Contratos, estados y conversión a SARIF">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="contracts-title" value="&lt;b&gt;3. Contratos, estados y conversión a SARIF&lt;/b&gt;&lt;br&gt;Tres niveles de estado: corrida, archivo y consolidación · JSON conserva resultados; FAIL_ON filtra el SARIF final" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=24;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="1720" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-run-lane" value="&lt;b&gt;Corrida: summary.status&lt;/b&gt;&lt;br&gt;main() reemplaza el resumen al iniciar" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f2f4f7;strokeColor=#8994a5;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;verticalAlign=top;spacingTop=12;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="145" width="530" height="480" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-file-lane" value="&lt;b&gt;Archivo: results[].status&lt;/b&gt;&lt;br&gt;run_prompt_agent() aísla cada error" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f2f4f7;strokeColor=#8994a5;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;verticalAlign=top;spacingTop=12;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="145" width="530" height="480" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-model-lane" value="&lt;b&gt;Respuesta del juez&lt;/b&gt;&lt;br&gt;Pydantic + evidencia literal" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f2f4f7;strokeColor=#8994a5;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;verticalAlign=top;spacingTop=12;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="145" width="580" height="480" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-running" value="&lt;b&gt;RUNNING&lt;/b&gt;&lt;br&gt;Resumen inicial; results=[]&lt;br&gt;Interrupción: permanece RUNNING" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="100" y="225" width="410" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-complete" value="&lt;b&gt;COMPLETE&lt;/b&gt;&lt;br&gt;Terminó sin error técnico&lt;br&gt;Puede contener hallazgos REVIEW" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="70" y="385" width="225" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-run-error" value="&lt;b&gt;ERROR&lt;/b&gt;&lt;br&gt;Falla inicial o por TXT&lt;br&gt;exit_code=2" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#fde9e7;strokeColor=#b75c54;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="320" y="385" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-not-app" value="&lt;b&gt;NOT_APPLICABLE&lt;/b&gt;&lt;br&gt;Sin TXT elegibles; no consulta al juez; exit_code=0" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f2f4f7;strokeColor=#8994a5;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="85" y="535" width="440" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-review" value="&lt;b&gt;REVIEW&lt;/b&gt;&lt;br&gt;Uno o más findings completos&lt;br&gt;review_required=true" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#fff1dc;strokeColor=#cf963a;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="650" y="220" width="450" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-none" value="&lt;b&gt;NO_FINDINGS&lt;/b&gt;&lt;br&gt;findings=[]; no certifica seguridad" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="650" y="350" width="450" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-file-error" value="&lt;b&gt;ERROR&lt;/b&gt;&lt;br&gt;findings=[]; error redactado&lt;br&gt;partial_findings separados si existen" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#fde9e7;strokeColor=#b75c54;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="650" y="470" width="450" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-judgement" value="&lt;b&gt;AuditJudgement&lt;/b&gt;&lt;br&gt;summary: str&lt;br&gt;findings: list[Finding]&lt;br&gt;limitations: list[str]" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1215" y="220" width="510" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-fields" value="&lt;b&gt;Finding&lt;/b&gt;&lt;br&gt;rule_id; severity; title&lt;br&gt;explanation; recommendation; impact_conditions&lt;br&gt;line_number; evidence&lt;br&gt;Verificación agrega end_line_number y ajustes" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1215" y="355" width="510" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-repair" value="&lt;b&gt;CitationRepair&lt;/b&gt;&lt;br&gt;replacements(index, line_number, evidence)&lt;br&gt;withdrawals(index, reason)&lt;br&gt;Solo candidatos con cita rechazada" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1215" y="520" width="510" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-edge-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="contracts-running" target="contracts-complete">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-edge-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="contracts-running" target="contracts-run-error">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-edge-3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;exitX=0;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="contracts-running" target="contracts-not-app">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="55" y="270" />
+              <mxPoint x="55" y="567" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="contracts-edge-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="contracts-judgement" target="contracts-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-edge-5" value="corrección dirigida" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="contracts-fields" target="contracts-repair">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-summary" value="&lt;b&gt;prompt_audit/summary.json&lt;/b&gt;&lt;br&gt;Estado + exit_code + run_id + modelo + hash de rúbrica + tiempos&lt;br&gt;results: archivo, hash, estado, hallazgos y errores" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="665" width="1720" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-edge-6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;exitX=0.5;exitY=1;entryX=0.12;entryY=0;" edge="1" parent="1" source="contracts-complete" target="contracts-summary">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-edge-7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="contracts-file-error" target="contracts-summary">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-inputs" value="&lt;b&gt;semantic_inputs(args)&lt;/b&gt;&lt;br&gt;--semantic-summary + --semantic-root&lt;br&gt;Estado final, cobertura completa&lt;br&gt;Hashes actuales y sin duplicados" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="805" width="390" height="125" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-convert" value="&lt;b&gt;convert_semantic_report(record, uri, metadata)&lt;/b&gt;&lt;br&gt;findings → SARIF 2.1.0&lt;br&gt;Regla, líneas, evidencia y recomendación&lt;br&gt;Metadatos y reviewRequired=true" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e8f1ff;strokeColor=#4c78a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="480" y="805" width="390" height="125" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-process" value="&lt;b&gt;process_tool(..., fail_on)&lt;/b&gt;&lt;br&gt;FAIL_ON: critical | high | medium | low&lt;br&gt;none: todas las elegibles, sin bloqueo&lt;br&gt;JSON originales: conservan todo" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#f0e8fa;strokeColor=#8560a8;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="920" y="805" width="390" height="125" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-final" value="&lt;b&gt;merge_runs() + escritura&lt;/b&gt;&lt;br&gt;Un run por herramienta&lt;br&gt;Resumen y SARIF unificados&lt;br&gt;PASS o BLOCK según política" style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#e7f4e8;strokeColor=#4d8b57;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1360" y="805" width="400" height="125" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-edge-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;exitX=0.11;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="contracts-summary" target="contracts-inputs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-edge-9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="contracts-inputs" target="contracts-convert">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-edge-10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="contracts-convert" target="contracts-process">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-edge-11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#596b84;fontColor=#344563;" edge="1" parent="1" source="contracts-process" target="contracts-final">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-error-policy" value="&lt;b&gt;ERROR global: auditoría incompleta o fallo técnico&lt;/b&gt;&lt;br&gt;Consolidador devuelve 2 y elimina el SARIF final. No publica partial_findings.&lt;br&gt;--defer-exit permite llegar a la consolidación; el código real queda en summary.exit_code." style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#fde9e7;strokeColor=#b75c54;fontColor=#172b4d;fontFamily=Helvetica;fontSize=16;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1010" width="1000" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-levels" value="&lt;b&gt;Mapeo de severidad a nivel SARIF&lt;/b&gt;&lt;br&gt;critical / high → error · medium → warning · low / info → note&lt;br&gt;La severidad original permanece en properties.&lt;br&gt;El quality gate de Sonar se evalúa por separado." style="rounded=1;whiteSpace=wrap;html=1;shadow=0;fillColor=#ffffff;strokeColor=#bdc8d6;fontColor=#172b4d;fontFamily=Helvetica;fontSize=15;spacing=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="1010" width="670" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="contracts-edge-12" value="estado inválido / ERROR" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=13;strokeColor=#b75c54;fontColor=#344563;exitX=0.5;exitY=1;entryX=0.2;entryY=0;" edge="1" parent="1" source="contracts-inputs" target="contracts-error-policy">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="235" y="975" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
