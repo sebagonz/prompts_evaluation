@@ -1,6 +1,6 @@
 # Analizador semántico integrado
 
-El código y las pruebas de `giskard-poc` están incorporados en `scripts/`.
+El código del harness y sus pruebas están en `scripts/`.
 La implementación usa la misma imagen que PromptSonar y pi-auditor, con un
 proceso y reportes separados. La [guía principal](README.md) describe el
 arranque completo, el flujo GitLab, los artefactos y las pruebas sin API.

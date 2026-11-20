@@ -40,7 +40,7 @@ conserva su base de datos. No usar `--abort-on-container-exit` para este flujo:
 los workers terminan antes que la consolidación.
 
 `LITELLM_PORT` configura el puerto del host, por defecto `4001`, para convivir
-con `giskard-poc` en `4000`. Compose y el aprovisionamiento de la clave virtual
+con otros servicios en `4000`. Compose y el aprovisionamiento de la clave virtual
 leen la misma variable desde `.env` o desde la terminal. Si ese puerto también
 está ocupado, usar por ejemplo `LITELLM_PORT=4002 ./scripts/start-local.sh`.
 Dentro de Docker, el proxy sigue accesible como `http://litellm:4000/v1`.
@@ -123,8 +123,8 @@ publicación ni una pipeline remota durante la integración.
 
 ## Pruebas sin consumo de API
 
-Se conserva `scripts/test_scan_prompts.py` del proyecto `giskard-poc` y se
-agregan pruebas de consolidación e integración con respuestas simuladas.
+`scripts/test_scan_prompts.py` cubre el contrato del harness. Se incluyen
+también pruebas de consolidación e integración con respuestas simuladas.
 La suite usa mocks y un servidor HTTP en loopback, sin proveedores:
 
 ```bash
@@ -136,12 +136,12 @@ docker run --rm --network none --entrypoint python3 \
 Para incluir la prueba de los scanners estáticos reales con el juez simulado,
 agregar `-e RUN_STATIC_INTEGRATION=1` a `docker run`. Todo permanece sin red externa.
 
-Para probar el checkout con la imagen ya descargada del proyecto anterior:
+Para probar los scripts copiados con la imagen unificada ya construida:
 
 ```bash
-docker run --rm --network none --entrypoint python \
+docker run --rm --network none --entrypoint python3 \
   -e LITELLM_LOCAL_MODEL_COST_MAP=true -e DO_NOT_TRACK=1 \
-  -v "$PWD/scripts:/tests:ro" -w /tests prompt-auditor:local \
+  -v "$PWD/scripts:/tests:ro" -w /tests prompt-security-poc:local \
   -m unittest discover -v
 ```
 
@@ -302,17 +302,20 @@ usarla. `PI-NO-ROLEGUARD` permanece en el JSON y se publica en SARIF cuando
 
 ## Archivos para el ambiente del cliente
 
-Publicar la imagen construida con `Dockerfile`, `package.json`,
-`requirements-semantic.txt`, `certs/` y `scripts/` completo, incluida la rúbrica. Copiar
-también `.gitlab-ci.yml`, `registry.properties` y los prompts/excepciones que
-correspondan. Para reproducir la infraestructura local, incluir `docker-compose.yml`,
-`.env.example` y `litellm/`; no copiar `.env` ni claves de proveedores.
+La lista exacta de fuentes, configuración, pruebas y documentación está en
+[COPIA_MANUAL_CLIENTE.md](COPIA_MANUAL_CLIENTE.md). Distingue la construcción
+de la imagen, la ejecución con un proxy del cliente y el stack completo local.
+GitLab y `registry.properties` son opcionales para una prueba manual.
+
+La guía también explica cómo transportar la imagen con `docker save` /
+`docker load` cuando no se permite descargar dependencias en el cliente.
+Crear `.env` en destino con credenciales de ese ambiente.
 
 ## Red corporativa y certificados
 
 El build descarga dependencias npm/Python y el auditor desde GitHub.
 Instala las CA públicas de `certs/` en el almacén del contenedor. Se incluyó
-la CA de inspección Kyndryl ya utilizada en el proyecto anterior; LiteLLM
+la CA de inspección Kyndryl del laboratorio; LiteLLM
 también la incorpora a su bundle al iniciar. Para otra
 red, reemplazarla por las CA aprobadas allí. pip mantiene TLS verificado. Para este POC de
 laboratorio, la validación TLS de npm y Git está desactivada por defecto para
@@ -329,8 +332,8 @@ LOCAL_UID="$(id -u)" LOCAL_GID="$(id -g)" \
 
 Si el laboratorio no tiene salida a npm/GitHub, construir la imagen en un
 entorno autorizado y transferirla como artefacto OCI con
-`docker save` / `docker load`; Git por sí solo no elimina esas descargas del
-build.
+`docker save` / `docker load`; copiar las fuentes a mano no elimina esas
+descargas del build.
 
 ## Reproducibilidad y límites
 

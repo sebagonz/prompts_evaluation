@@ -9,7 +9,8 @@ docker compose version
 docker compose config
 ```
 
-Desde la raíz clonada por Git:
+Desde la raíz del proyecto copiado al cliente (ver
+[COPIA_MANUAL_CLIENTE.md](COPIA_MANUAL_CLIENTE.md)):
 
 ```bash
 mkdir -p reports

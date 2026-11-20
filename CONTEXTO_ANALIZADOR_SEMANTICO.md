@@ -1,8 +1,8 @@
 # Contexto del analizador semántico: estructura y funciones
 
-**Proyecto:** `prompts-analizer` (harness incorporado desde `giskard-poc`).
+**Proyecto:** `prompts-analizer` — analizador de seguridad de prompts.
 
-**Actualizado:** 5 de noviembre de 2026.
+**Actualizado:** 20 de noviembre de 2026.
 
 **Fuente de esta descripción:** código actual de `scripts/semantic_scan_prompts.py`,
 `scripts/consolidate_scan_reports.py`, `Dockerfile` y `docker-compose.yml`.

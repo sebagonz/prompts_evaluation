@@ -27,7 +27,7 @@ class LocalProxyPortTests(unittest.TestCase):
         self.patch_environment.start()
         self.addCleanup(self.patch_environment.stop)
 
-    def test_default_avoids_giskard_port(self):
+    def test_default_uses_dedicated_proxy_port(self):
         self.assertEqual(setup.local_proxy_url(), "http://127.0.0.1:4001")
 
     def test_existing_env_without_port_uses_new_default(self):

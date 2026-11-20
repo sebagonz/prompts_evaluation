@@ -1,6 +1,6 @@
 # Contexto actual del proyecto — analizador de prompts
 
-Actualizado: 5 de noviembre de 2026.
+Actualizado: 20 de noviembre de 2026.
 
 ## Alcance
 
@@ -82,3 +82,5 @@ inspección se debe instalar la CA corporativa en vez de desactivar esa validaci
 Ver [README.md](README.md) para comandos, parámetros y despliegue; ver
 [CONTEXTO_ANALIZADOR_SEMANTICO.md](CONTEXTO_ANALIZADOR_SEMANTICO.md) para el
 contrato detallado heredado y su estado de integración.
+La lista de archivos para transportar el proyecto sin clonar el repositorio
+está en [COPIA_MANUAL_CLIENTE.md](COPIA_MANUAL_CLIENTE.md).
